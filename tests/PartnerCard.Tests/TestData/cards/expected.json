@@ -330,5 +330,20 @@
     "website": "",
     "address": "",
     "detectedLanguage": ""
+  },
+  "ja-01-partial": {
+    "isBusinessCard": true,
+    "note": "the bi cat mat khoi lien he - kiem viec KHONG bia phan khong nhin thay",
+    "fullName": "田中 太郎",
+    "jobTitle": "営業部長",
+    "company": "株式会社青葉精工",
+    "phones": [],
+    "emails": [],
+    "website": "",
+    "address": "",
+    "detectedLanguage": "ja",
+    "fullNameLatin": "Tanaka Taro",
+    "companyLatin": "Aoba Seiko",
+    "searchAlias": "Tanaka Taro Aoba Seiko"
   }
 }
