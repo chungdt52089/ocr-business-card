@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>PartnerCard.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    FluentAssertions ghim ở 7.x cố ý: từ 8.0 nó đổi sang Xceed Community License,
+    dùng thương mại phải trả tiền. 7.2.0 còn Apache-2.0. Cùng loại lý do đã dùng
+    để loại ImageSharp ở SPEC mục 1.
+  -->
+  <ItemGroup>
+    <PackageReference Include="FluentAssertions" Version="7.2.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PartnerCard.Web/PartnerCard.Web.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+  </ItemGroup>
+
+  <!-- Ảnh mẫu và expected.json phải có mặt cạnh binary: FakeExtractor đọc chúng lúc chạy. -->
+  <ItemGroup>
+    <None Include="TestData/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
