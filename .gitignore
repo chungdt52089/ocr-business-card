@@ -1,0 +1,21 @@
+# --- .NET ---
+bin/
+obj/
+*.user
+.vs/
+
+# --- Bí mật: KHÔNG BAO GIỜ commit. Repo này có remote công khai. ---
+appsettings.Development.json
+appsettings.*.Local.json
+*.env
+
+# --- Sinh ra lúc chạy ---
+logs/
+data/images/
+data/partners.json
+data/counter.json
+
+# --- Ảnh chụp danh thiếp: xem quy tắc trong CLAUDE.md ---
+# Ảnh chụp phải được thu nhỏ về cạnh dài <= 1600px TRƯỚC khi commit.
+# Ảnh gốc từ máy ảnh (nhiều MB) thì không commit.
+tests/PartnerCard.Tests/TestData/cards/*.orig.jpg

@@ -1,0 +1,334 @@
+{
+  "en-01": {
+    "isBusinessCard": true,
+    "fullName": "Marcus Feld",
+    "jobTitle": "Operations Director",
+    "company": "Halbrook Logistics",
+    "phones": [
+      "+1 555 0142 887"
+    ],
+    "emails": [
+      "m.feld@halbrook-logistics.example"
+    ],
+    "website": "halbrook-logistics.example",
+    "address": "418 Kestrel Avenue, Suite 12, Portland OR 97205",
+    "detectedLanguage": "en"
+  },
+  "en-02": {
+    "isBusinessCard": true,
+    "fullName": "Priya Raman",
+    "jobTitle": "Senior Data Engineer",
+    "company": "Corvid Analytics",
+    "phones": [
+      "+1 555 0198 224"
+    ],
+    "emails": [
+      "priya.raman@corvid-analytics.example"
+    ],
+    "website": "corvid-analytics.example",
+    "address": "9 Marlowe Street, Floor 4, Boston MA 02116",
+    "detectedLanguage": "en"
+  },
+  "en-03": {
+    "isBusinessCard": true,
+    "fullName": "Tomás Herrera",
+    "jobTitle": "Head of Procurement",
+    "company": "Westmoor Industrial",
+    "phones": [
+      "+44 20 7946 0331"
+    ],
+    "emails": [
+      "t.herrera@westmoor-ind.example"
+    ],
+    "website": "westmoor-ind.example",
+    "address": "Unit 7, Calder Works, Leeds LS11 5DR",
+    "detectedLanguage": "en"
+  },
+  "en-04": {
+    "isBusinessCard": true,
+    "fullName": "Anna Lindqvist",
+    "jobTitle": "Export Manager",
+    "company": "Nordfell Marine AB",
+    "phones": [
+      "+46 31 555 0087"
+    ],
+    "emails": [
+      "a.lindqvist@nordfell.example"
+    ],
+    "website": "nordfell.example",
+    "address": "Hamngatan 22, 411 06 Göteborg, Sweden",
+    "detectedLanguage": "en"
+  },
+  "en-05": {
+    "isBusinessCard": true,
+    "fullName": "David Okonkwo",
+    "jobTitle": "Regional Sales Lead",
+    "company": "Brightline Components",
+    "phones": [
+      "+65 6555 0173"
+    ],
+    "emails": [
+      "d.okonkwo@brightline-c.example"
+    ],
+    "website": "brightline-c.example",
+    "address": "18 Tuas Link 2, #03-11, Singapore 638550",
+    "detectedLanguage": "en"
+  },
+  "en-06": {
+    "isBusinessCard": true,
+    "fullName": "Sarah Whitcombe",
+    "jobTitle": "Founder & Creative Director",
+    "company": "Tessellate Studio",
+    "phones": [
+      "+61 2 5550 4416"
+    ],
+    "emails": [
+      "sarah@tessellate.example"
+    ],
+    "website": "tessellate.example",
+    "address": "Level 2, 88 Renwick Lane, Surry Hills NSW 2010",
+    "detectedLanguage": "en"
+  },
+  "en-07": {
+    "isBusinessCard": true,
+    "fullName": "Kenji Whitmore",
+    "jobTitle": "Plant Manager",
+    "company": "Ironvale Precision Ltd.",
+    "phones": [
+      "+1 555 0233 901",
+      "+1 555 0233 918"
+    ],
+    "emails": [
+      "k.whitmore@ironvale.example"
+    ],
+    "website": "ironvale.example",
+    "address": "2200 Foundry Road, Hamilton ON L8E 3P1",
+    "detectedLanguage": "en"
+  },
+  "en-08": {
+    "isBusinessCard": true,
+    "fullName": "Elena Brandt",
+    "jobTitle": "Quality Assurance Specialist",
+    "company": "Auverne Materials",
+    "phones": [
+      "+49 221 5550 662"
+    ],
+    "emails": [],
+    "website": "auverne-materials.example",
+    "address": "Industriestraße 44, 50735 Köln, Germany",
+    "detectedLanguage": "en"
+  },
+  "ja-01": {
+    "isBusinessCard": true,
+    "fullName": "田中 太郎",
+    "jobTitle": "営業部長",
+    "company": "株式会社青葉精工",
+    "phones": [
+      "03-5550-1284"
+    ],
+    "emails": [
+      "t.tanaka@aoba-seiko.example"
+    ],
+    "website": "aoba-seiko.example",
+    "address": "〒101-0032 東京都千代田区岩本町2-4-9 青葉ビル6F",
+    "detectedLanguage": "ja",
+    "cityLatin": "Tokyo Chiyoda",
+    "fullNameLatin": "Tanaka Taro",
+    "companyLatin": "Aoba Seiko",
+    "searchAlias": "Tanaka Taro Aoba Seiko Tokyo Chiyoda"
+  },
+  "ja-02": {
+    "isBusinessCard": true,
+    "fullName": "佐藤 美咲",
+    "jobTitle": "主任研究員",
+    "company": "株式会社みらい技研",
+    "phones": [
+      "06-6555-3391"
+    ],
+    "emails": [
+      "m.sato@mirai-giken.example"
+    ],
+    "website": "mirai-giken.example",
+    "address": "〒532-0011 大阪府大阪市淀川区西中島4-11-2",
+    "detectedLanguage": "ja",
+    "cityLatin": "Osaka Yodogawa",
+    "fullNameLatin": "Sato Misaki",
+    "companyLatin": "Mirai Giken",
+    "searchAlias": "Sato Misaki Mirai Giken Osaka Yodogawa"
+  },
+  "ja-03": {
+    "isBusinessCard": true,
+    "fullName": "鈴木 健一",
+    "jobTitle": "代表取締役",
+    "company": "有限会社鈴木鋼材",
+    "phones": [
+      "052-555-7720"
+    ],
+    "emails": [
+      "suzuki@suzuki-kouzai.example"
+    ],
+    "website": "suzuki-kouzai.example",
+    "address": "〒456-0058 愛知県名古屋市熱田区六番1-8-3",
+    "detectedLanguage": "ja",
+    "cityLatin": "Aichi Nagoya Atsuta",
+    "fullNameLatin": "Suzuki Kenichi",
+    "companyLatin": "Suzuki Kouzai",
+    "searchAlias": "Suzuki Kenichi Suzuki Kouzai Aichi Nagoya Atsuta"
+  },
+  "ja-04": {
+    "isBusinessCard": true,
+    "fullName": "高橋 由紀",
+    "jobTitle": "海外事業部 課長",
+    "company": "株式会社東雲トレーディング",
+    "phones": [
+      "+81-3-5550-8802"
+    ],
+    "emails": [
+      "y.takahashi@shinonome-td.example"
+    ],
+    "website": "shinonome-td.example",
+    "address": "〒135-0062 東京都江東区東雲1-9-4 東雲センタービル11F",
+    "detectedLanguage": "ja",
+    "cityLatin": "Tokyo Koto",
+    "fullNameLatin": "Takahashi Yuki",
+    "companyLatin": "Shinonome Trading",
+    "searchAlias": "Takahashi Yuki Shinonome Trading Tokyo Koto"
+  },
+  "ja-05": {
+    "isBusinessCard": true,
+    "fullName": "渡辺 拓真",
+    "jobTitle": "技術顧問",
+    "company": "株式会社白鷺システムズ",
+    "phones": [
+      "092-555-4108"
+    ],
+    "emails": [
+      "t.watanabe@shirasagi-sys.example"
+    ],
+    "website": "shirasagi-sys.example",
+    "address": "〒812-0011 福岡県福岡市博多区博多駅前3-22-8",
+    "detectedLanguage": "ja",
+    "cityLatin": "Fukuoka Hakata",
+    "fullNameLatin": "Watanabe Takuma",
+    "companyLatin": "Shirasagi Systems",
+    "searchAlias": "Watanabe Takuma Shirasagi Systems Fukuoka Hakata"
+  },
+  "ja-06": {
+    "isBusinessCard": true,
+    "fullName": "伊藤 千尋",
+    "jobTitle": "購買課長",
+    "company": "株式会社北斗機械",
+    "phones": [
+      "011-555-2263"
+    ],
+    "emails": [
+      "c.ito@hokuto-kikai.example"
+    ],
+    "website": "hokuto-kikai.example",
+    "address": "〒060-0042 北海道札幌市中央区大通西14-3-1",
+    "detectedLanguage": "ja",
+    "cityLatin": "Hokkaido Sapporo Chuo",
+    "fullNameLatin": "Ito Chihiro",
+    "companyLatin": "Hokuto Kikai",
+    "searchAlias": "Ito Chihiro Hokuto Kikai Hokkaido Sapporo Chuo"
+  },
+  "ja-07": {
+    "isBusinessCard": true,
+    "fullName": "山本 大輔",
+    "jobTitle": "品質保証部 主任",
+    "company": "株式会社緑川工業",
+    "phones": [
+      "045-555-9017",
+      "090-5550-3312"
+    ],
+    "emails": [
+      "d.yamamoto@midorikawa-k.example"
+    ],
+    "website": "midorikawa-k.example",
+    "address": "〒222-0033 神奈川県横浜市港北区新横浜2-6-15",
+    "detectedLanguage": "ja",
+    "cityLatin": "Kanagawa Yokohama Kohoku",
+    "fullNameLatin": "Yamamoto Daisuke",
+    "companyLatin": "Midorikawa Kogyo",
+    "searchAlias": "Yamamoto Daisuke Midorikawa Kogyo Kanagawa Yokohama Kohoku"
+  },
+  "ja-08": {
+    "isBusinessCard": true,
+    "fullName": "中村 彩",
+    "jobTitle": "広報担当",
+    "company": "株式会社海風デザイン",
+    "phones": [
+      "078-555-6640"
+    ],
+    "emails": [],
+    "website": "umikaze-design.example",
+    "address": "〒650-0011 兵庫県神戸市中央区下山手通4-15-7",
+    "detectedLanguage": "ja",
+    "cityLatin": "Hyogo Kobe Chuo",
+    "fullNameLatin": "Nakamura Aya",
+    "companyLatin": "Umikaze Design",
+    "searchAlias": "Nakamura Aya Umikaze Design Hyogo Kobe Chuo"
+  },
+  "bi-01": {
+    "isBusinessCard": true,
+    "fullName": "中川 寛",
+    "jobTitle": "輸出部長",
+    "company": "株式会社桜川貿易",
+    "phones": [
+      "+81-3-5550-2277"
+    ],
+    "emails": [
+      "h.nakagawa@sakuragawa-td.example"
+    ],
+    "website": "sakuragawa-td.example",
+    "address": "〒104-0061 東京都中央区銀座8-12-5",
+    "detectedLanguage": "mixed",
+    "fullNameLatin": "Hiroshi Nakagawa",
+    "companyLatin": "Sakuragawa Trading K.K.",
+    "cityLatin": "Tokyo Chuo Ginza",
+    "searchAlias": "Hiroshi Nakagawa Sakuragawa Trading K.K. Tokyo Chuo Ginza"
+  },
+  "bi-02": {
+    "isBusinessCard": true,
+    "fullName": "田辺 芽衣",
+    "jobTitle": "事業開発部",
+    "company": "株式会社ルミナオプティクス",
+    "phones": [
+      "+81-45-555-1190"
+    ],
+    "emails": [
+      "m.tanabe@lumina-optics.example"
+    ],
+    "website": "lumina-optics.example",
+    "address": "〒220-0012 神奈川県横浜市西区みなとみらい3-6-1",
+    "detectedLanguage": "mixed",
+    "fullNameLatin": "Mei Tanabe",
+    "companyLatin": "Lumina Optics K.K.",
+    "cityLatin": "Kanagawa Yokohama Nishi Minatomirai",
+    "searchAlias": "Mei Tanabe Lumina Optics K.K. Kanagawa Yokohama Nishi Minatomirai"
+  },
+  "neg-01": {
+    "isBusinessCard": false,
+    "note": "anh phong canh",
+    "fullName": "",
+    "jobTitle": "",
+    "company": "",
+    "phones": [],
+    "emails": [],
+    "website": "",
+    "address": "",
+    "detectedLanguage": ""
+  },
+  "neg-02": {
+    "isBusinessCard": false,
+    "note": "anh trang",
+    "fullName": "",
+    "jobTitle": "",
+    "company": "",
+    "phones": [],
+    "emails": [],
+    "website": "",
+    "address": "",
+    "detectedLanguage": ""
+  }
+}
