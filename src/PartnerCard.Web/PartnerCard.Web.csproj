@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PartnerCard.Web</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Test chạm được lớp nội bộ, không phải mở public chỉ để kiểm thử (SPEC mục 2). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PartnerCard.Tests" />
+  </ItemGroup>
+
+</Project>
