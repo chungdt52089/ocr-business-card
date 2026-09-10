@@ -25,13 +25,14 @@ builder.Services.AddSingleton(TimeProvider.System);
 try
 {
     // Kiểm cấu hình và khoá trước tiên: thiếu khoá ở chế độ gemini thì chết ngay (I-07).
-    builder.Services.AddSingleton(SecretLoader.Load(builder.Configuration, options));
+    var secrets = SecretLoader.Load(builder.Configuration, options);
+    builder.Services.AddSingleton(secrets);
 
     // Nạp một lần lúc khởi động. File hỏng thì chết ngay kèm thông báo rõ (S-12).
     builder.Services.AddSingleton<IPartnerStore>(
         JsonPartnerStore.LoadFrom(dataDirectory, TimeProvider.System));
 
-    builder.Services.AddSingleton<IExtractor>(SelectExtractor(options));
+    builder.Services.AddSingleton<IExtractor>(SelectExtractor(options, secrets));
 }
 catch (InvalidOperationException ex)
 {
@@ -72,14 +73,19 @@ return 0;
 
 // Chọn bản cài IExtractor theo cấu hình (SPEC mục 4.1). SecretLoader đã loại giá trị lạ,
 // nên tới đây chỉ còn hai nhánh hợp lệ.
-static IExtractor SelectExtractor(PartnerCardOptions options)
+static IExtractor SelectExtractor(PartnerCardOptions options, SecretOptions secrets)
 {
     if (options.RequiresApiKey)
     {
-        throw new InvalidOperationException(
-            "Chưa có GeminiExtractor — nó thuộc T-07. " +
-            $"Đặt {PartnerCardOptions.SectionName}:Extractor = \"{ExtractorNames.Fake}\" " +
-            "để chạy đường ống offline.");
+        // Một HttpClient dùng lại cho cả vòng đời tiến trình: chỉ có một endpoint, và tạo mới
+        // mỗi lời gọi là bỏ phí bắt tay TLS rồi đọng socket ở TIME_WAIT.
+        //
+        // Timeout để vô hạn ở đây là cố ý: nguồn hạn giờ duy nhất là CancellationTokenSource
+        // trong GeminiExtractor, vì chỉ nó phân biệt được timeout của mình với việc người dùng
+        // huỷ — HttpClient.Timeout thì không (SPEC mục 4.1).
+        var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+
+        return new GeminiExtractor(http, secrets, Microsoft.Extensions.Options.Options.Create(options));
     }
 
     // Bảng đáp án được csproj chép sang output, nên tìm theo thư mục chứa binary

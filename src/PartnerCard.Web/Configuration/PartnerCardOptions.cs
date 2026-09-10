@@ -22,7 +22,9 @@ public sealed class PartnerCardOptions
 
     public string Model { get; set; } = "gemini-3.8-flash";
 
-    public string PromptVersion { get; set; } = "v1";
+    // PromptVersion cố ý KHÔNG có ở đây: nó là hằng Prompts.Version, nằm cạnh chính chuỗi
+    // prompt được gửi đi (SPEC mục 13). Để trong cấu hình thì sửa prompt mà quên đổi số là
+    // hồ sơ ghi một phiên bản chưa từng được gửi.
 
     /// <summary>Trần 8 MB theo NFR-4, nằm an toàn dưới trần 20 MB của Gemini (SPEC mục 4.2).</summary>
     public int MaxImageBytes { get; set; } = 8 * 1024 * 1024;

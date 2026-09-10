@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace PartnerCard.Web.Models;
 
 /// <summary>
@@ -21,7 +23,13 @@ public sealed record CardExtractionResult(
     string SearchAlias,
     IReadOnlyDictionary<string, double> FieldConfidence)
 {
-    /// <summary>Ghi chú thông tin, không phải dữ liệu. Ví dụ <c>unnormalizedPhone</c>.</summary>
+    /// <summary>
+    /// Ghi chú thông tin, không phải dữ liệu. Ví dụ <c>unnormalizedPhone</c>.
+    ///
+    /// <c>[JsonIgnore]</c> vì nó **không thuộc schema mục 4.4**: mô hình không bao giờ gửi nó về,
+    /// và nếu ta serialize nó ra thì guard sẽ coi là khoá lạ và SG-1 kêu oan.
+    /// </summary>
+    [JsonIgnore]
     public IReadOnlyList<string> Warnings { get; init; } = [];
 
     /// <summary>
