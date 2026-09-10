@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 using PartnerCard.Web.Configuration;
@@ -25,10 +26,15 @@ namespace PartnerCard.Web.Extraction;
 /// gọi huỷ thì để nguyên — xem <see cref="SendAsync"/>.</item>
 /// </list>
 /// </summary>
+/// <param name="retryDelay">
+/// Chờ bao lâu trước lần thử lại duy nhất cho <c>5xx</c>. Mặc định 2 giây; ca kiểm thử truyền
+/// <see cref="TimeSpan.Zero"/> để không phải ngồi đợi.
+/// </param>
 public sealed class GeminiExtractor(
     HttpClient http,
     SecretOptions secrets,
-    IOptions<PartnerCardOptions> options) : IExtractor
+    IOptions<PartnerCardOptions> options,
+    TimeSpan? retryDelay = null) : IExtractor
 {
     private const string EndpointFormat =
         "https://generativelanguage.googleapis.com/v1beta/models/{0}:generateContent";
@@ -38,6 +44,45 @@ public sealed class GeminiExtractor(
 
     /// <summary>Dấu hiệu Google dùng cho khoá không dùng được (SPEC mục 4.6).</summary>
     private const string InvalidKeyMarker = "API_KEY_INVALID";
+
+    /// <summary>
+    /// Mức suy luận. <c>gemini-3.8-flash</c> mặc định <c>medium</c> và **không cho tắt hẳn**
+    /// (dòng Flash không hỗ trợ <c>minimal</c> lẫn thinking-off), nên <c>low</c> là cửa thấp nhất có.
+    ///
+    /// Chọn <c>low</c> vì số đo: cùng một tấm thẻ, cùng prompt, ba lượt ở mức <c>medium</c> cho
+    /// 20,4s hỏng · 23s xanh · 108,7s hỏng. Độ trễ dao động năm lần như vậy không dùng được cho
+    /// một buổi demo trực tiếp.
+    ///
+    /// **Đây là <c>generationConfig</c>, không phải prompt, nên <c>promptVersion</c> không ghi
+    /// lại được nó.** Bộ đo phải in nó thành một dòng riêng trong <c>EVAL.md</c> cạnh
+    /// <c>promptVersion</c> (SPEC mục 14), nếu không thì hai lượt đo lệch nhau mà không có gì
+    /// nói tại sao. Vì vậy hằng này <c>public</c>: T-08 đọc thẳng, không chép lại chuỗi.
+    /// </summary>
+    public const string ThinkingLevel = "low";
+
+    /// <summary>
+    /// **Token suy luận dùng chung ngân sách này với token đầu ra.** Đó chính là cách sinh ra
+    /// cảnh "<c>finishReason: MAX_TOKENS</c> mà <c>parts</c> rỗng": mô hình nghĩ hết ngân sách
+    /// rồi không còn chỗ viết câu trả lời. JSON của một tấm thẻ chưa tới 1.000 token, nên để
+    /// rộng hẳn cho phần suy luận là cách rẻ nhất để loại bỏ hẳn kiểu hỏng đó.
+    /// </summary>
+    private const int MaxOutputTokens = 16384;
+
+    /// <summary>
+    /// Số lần gửi tối đa cho **một** tấm thẻ: một lần đầu, cộng đúng **một** lần thử lại, và
+    /// **chỉ cho <c>5xx</c>**.
+    ///
+    /// <c>429</c> thì tuyệt đối không — xem <see cref="ExtractorUnavailableException"/> cho lý do
+    /// hai mã này đi ngược nhau. Ca X-16 khẳng định <c>429</c> vẫn đúng một lời gọi.
+    /// </summary>
+    private const int MaxAttempts = 2;
+
+    /// <summary>Cắt bớt thông điệp lỗi của API trước khi đưa vào exception, kẻo log phình.</summary>
+    private const int MaxErrorMessageLength = 500;
+
+    private static readonly TimeSpan DefaultRetryDelay = TimeSpan.FromSeconds(2);
+
+    private readonly TimeSpan _retryDelay = retryDelay ?? DefaultRetryDelay;
 
     private PartnerCardOptions Options => options.Value;
 
@@ -86,6 +131,44 @@ public sealed class GeminiExtractor(
     /// </summary>
     private async Task<string> SendAsync(string requestBody, CancellationToken ct)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(Options.ExtractTimeoutSeconds));
+
+        try
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                var (status, body) = await SendOnceAsync(requestBody, timeout.Token);
+
+                if (IsSuccess(status))
+                {
+                    return body;
+                }
+
+                // Ném ngay với mọi mã KHÔNG đáng thử lại — 429 nằm trong số đó.
+                ThrowIfNotRetryable(status, body);
+
+                // Tới đây chỉ còn 5xx.
+                if (attempt >= MaxAttempts)
+                {
+                    throw new ExtractorUnavailableException(Detail(status, body));
+                }
+
+                // Quá tải là chuyện tạm thời, nên đợi một nhịp rồi thử đúng một lần nữa.
+                // Hạn giờ chung vẫn bao trọn cả hai lần gửi lẫn nhịp đợi này.
+                await Task.Delay(_retryDelay, timeout.Token);
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new ExtractorTimeoutException();
+        }
+    }
+
+    /// <summary>Một lần gửi. <c>HttpRequestMessage</c> không dùng lại được nên dựng mới mỗi lần.</summary>
+    private async Task<(HttpStatusCode Status, string Body)> SendOnceAsync(
+        string requestBody, CancellationToken ct)
+    {
         using var request = new HttpRequestMessage(
             HttpMethod.Post, string.Format(EndpointFormat, Options.Model))
         {
@@ -94,22 +177,9 @@ public sealed class GeminiExtractor(
 
         request.Headers.Add(ApiKeyHeader, secrets.GeminiApiKey);
 
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(Options.ExtractTimeoutSeconds));
+        using var response = await http.SendAsync(request, ct);
 
-        try
-        {
-            using var response = await http.SendAsync(request, timeout.Token);
-            var body = await response.Content.ReadAsStringAsync(timeout.Token);
-
-            EnsureSuccess(response.StatusCode, body);
-
-            return body;
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw new ExtractorTimeoutException();
-        }
+        return (response.StatusCode, await response.Content.ReadAsStringAsync(ct));
     }
 
     /// <summary>
@@ -119,24 +189,63 @@ public sealed class GeminiExtractor(
     /// **Thông báo không bao giờ mang thân phản hồi của Google** — nó đi thẳng ra màn hình người
     /// dùng, và ta không biết trước trong đó có gì.
     /// </summary>
-    private static void EnsureSuccess(HttpStatusCode status, string body)
+    private static void ThrowIfNotRetryable(HttpStatusCode status, string body)
     {
         if (status == HttpStatusCode.TooManyRequests)
         {
-            // Không thử lại. Thử lại chỉ tiêu thêm hạn mức mà kết quả vẫn thế.
-            throw new ExtractorQuotaException();
+            // Không bao giờ thử lại. Hết hạn mức là chuyện của cả ngày, không phải của giây này —
+            // thử lại chỉ tiêu thêm quota mà kết quả vẫn thế.
+            throw new ExtractorQuotaException(Detail(status, body));
         }
 
         if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
             || (status == HttpStatusCode.BadRequest
                 && body.Contains(InvalidKeyMarker, StringComparison.OrdinalIgnoreCase)))
         {
-            throw new ExtractorAuthException();
+            throw new ExtractorAuthException(Detail(status, body));
         }
 
-        if (!IsSuccess(status))
+        if (IsServerError(status))
         {
-            throw new InvalidOperationException($"Gemini trả mã {(int)status}.");
+            // Đáng thử lại — người gọi quyết định, vì chỉ nó biết đây là lần thứ mấy.
+            return;
+        }
+
+        throw Detail(status, body);
+    }
+
+    /// <summary>
+    /// Lý do thật, để nhét làm <c>InnerException</c>.
+    ///
+    /// Mang **mã HTTP cùng <c>error.status</c> và <c>error.message</c> của API** — đó là thông
+    /// điệp lỗi của Google, không phải nội dung tấm thẻ, nên đưa vào đây là an toàn. Chỉ bóc đúng
+    /// hai trường ấy chứ không đổ cả thân phản hồi.
+    ///
+    /// Người dùng vẫn chỉ thấy câu trung tính: <c>CardPipeline</c> trả
+    /// <see cref="Exception.Message"/> của **kiểu ngoài cùng**, không đụng tới inner.
+    /// </summary>
+    private static InvalidOperationException Detail(HttpStatusCode status, string body) =>
+        new($"Gemini trả mã {(int)status} ({status}). {ApiError(body)}");
+
+    private static string ApiError(string body)
+    {
+        try
+        {
+            var error = JsonNode.Parse(body)?["error"];
+
+            if (error is null)
+            {
+                return "Thân phản hồi không có trường error.";
+            }
+
+            var message = error["message"]?.GetValue<string>() ?? "(không có)";
+
+            return $"error.status={Field(error, "status")} error.message="
+                 + message[..Math.Min(message.Length, MaxErrorMessageLength)];
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+        {
+            return "Thân phản hồi không đọc được thành JSON.";
         }
     }
 
@@ -156,8 +265,7 @@ public sealed class GeminiExtractor(
 
         if (string.IsNullOrWhiteSpace(text))
         {
-            throw new InvalidOperationException(
-                "Phản hồi của Gemini không có phần văn bản nào (kiểm finishReason).");
+            throw new InvalidOperationException(Diagnose(root, text));
         }
 
         var usage = root["usageMetadata"];
@@ -197,10 +305,14 @@ public sealed class GeminiExtractor(
                     },
                 },
             },
+            // Hai khoá dưới viết camelCase đúng như tài liệu Gemini đặt tên chúng; hai khoá
+            // response_* giữ snake_case theo SPEC mục 4.2. REST API nhận cả hai lối.
             ["generationConfig"] = new JsonObject
             {
                 ["response_mime_type"] = "application/json",
                 ["response_schema"] = CardSchema.ResponseSchema(),
+                ["thinkingConfig"] = new JsonObject { ["thinkingLevel"] = ThinkingLevel },
+                ["maxOutputTokens"] = MaxOutputTokens,
             },
         };
 
@@ -217,8 +329,41 @@ public sealed class GeminiExtractor(
             ? Prompts.ExtractCard
             : $"{Prompts.ExtractCard}{Environment.NewLine}{Environment.NewLine}Gợi ý ngôn ngữ của thẻ: {languageHint}.";
 
+    /// <summary>
+    /// Vì sao phản hồi không có văn bản — **chỉ siêu dữ liệu của phong bì**, không một chữ nào
+    /// của tấm thẻ (mục 12 cấm ghi nội dung danh thiếp, và ở đây thì cũng không có gì để ghi:
+    /// <c>parts</c> rỗng mới sinh ra lời gọi này).
+    ///
+    /// Thông báo này **không tới người dùng**: <c>CardPipeline</c> thay nó bằng câu trung tính
+    /// của <c>extract_failed</c> (SPEC mục 10.3). Nó chỉ hiện ra ở ca <c>Live</c> và trong log
+    /// gỡ rối — và đó là chỗ duy nhất phân biệt được "mô hình nghĩ hết ngân sách" với "mạng lỗi".
+    /// </summary>
+    private static string Diagnose(JsonObject root, string? text)
+    {
+        var candidates = root["candidates"] as JsonArray;
+        var parts = candidates?[0]?["content"]?["parts"] as JsonArray;
+        var usage = root["usageMetadata"];
+
+        return "Phản hồi của Gemini không có phần văn bản nào. "
+            + $"finishReason={Field(candidates?[0], "finishReason")} "
+            + $"candidates={candidates?.Count ?? 0} parts={parts?.Count ?? 0} "
+            + $"textLength={text?.Length ?? 0} "
+            + $"promptTokenCount={Field(usage, "promptTokenCount")} "
+            + $"candidatesTokenCount={Field(usage, "candidatesTokenCount")} "
+            + $"thoughtsTokenCount={Field(usage, "thoughtsTokenCount")} "
+            + $"totalTokenCount={Field(usage, "totalTokenCount")}";
+    }
+
+    /// <summary><c>ToJsonString</c> chứ không <c>GetValue&lt;T&gt;</c>: nó không ném khi kiểu lệch.</summary>
+    private static string Field(JsonNode? node, string name) =>
+        node?[name]?.ToJsonString() ?? "(không có)";
+
     private static bool IsSuccess(HttpStatusCode status) =>
         (int)status is >= 200 and < 300;
+
+    /// <summary>Cả họ 5xx, không chỉ 500/502/503/504 — mọi mã trong họ đều là phía máy chủ.</summary>
+    private static bool IsServerError(HttpStatusCode status) =>
+        (int)status is >= 500 and < 600;
 
     private static int Elapsed(long started) =>
         (int)Stopwatch.GetElapsedTime(started).TotalMilliseconds;

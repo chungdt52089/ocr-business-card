@@ -28,8 +28,8 @@ public enum AuditLevel
 /// <c>BlockCode</c> và <c>ErrorCode</c> là **hai chuyện khác nhau, đừng gộp**:
 /// <list type="bullet">
 /// <item><c>BlockCode</c> (<c>SG-1</c>…<c>SG-8</c>) — guard đã chặn một kết quả **đã đọc được**.</item>
-/// <item><c>ErrorCode</c> (<c>quota_exhausted</c>, <c>extract_timeout</c>, <c>extractor_auth</c>,
-/// <c>extract_failed</c>) — **chưa hề có kết quả nào** để mà chặn.</item>
+/// <item><c>ErrorCode</c> (<c>quota_exhausted</c>, <c>extract_unavailable</c>,
+/// <c>extract_timeout</c>, <c>extractor_auth</c>, <c>extract_failed</c>) — **chưa hề có kết quả nào** để mà chặn.</item>
 /// </list>
 /// Một dòng không bao giờ mang cả hai. Gộp lại là xoá mất ranh giới giữa "mô hình trả về thứ
 /// không dùng được" và "mô hình không trả về gì cả" — hai chuyện xử lý khác hẳn nhau.

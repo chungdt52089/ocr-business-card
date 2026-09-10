@@ -314,12 +314,14 @@ public sealed class CardPipelineTests
     [InlineData("quota")]
     [InlineData("timeout")]
     [InlineData("auth")]
-    public async Task Ba_kieu_loi_ra_ba_ma_rieng_va_khong_exception_nao_thoat_ra(string kind)
+    [InlineData("unavailable")]
+    public async Task Bon_kieu_loi_ra_bon_ma_rieng_va_khong_exception_nao_thoat_ra(string kind)
     {
         var (thrown, expectedCode) = kind switch
         {
             "quota" => ((Exception)new ExtractorQuotaException(), "quota_exhausted"),
             "timeout" => (new ExtractorTimeoutException(), "extract_timeout"),
+            "unavailable" => (new ExtractorUnavailableException(), "extract_unavailable"),
             _ => (new ExtractorAuthException(), "extractor_auth"),
         };
 

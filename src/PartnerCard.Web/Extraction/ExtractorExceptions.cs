@@ -42,6 +42,24 @@ public sealed class ExtractorTimeoutException(Exception? inner = null)
     : ExtractorException("extract_timeout", "Mô hình phản hồi quá chậm. Thử lại sau vài giây.", inner);
 
 /// <summary>
+/// Cả họ <c>5xx</c> — dịch vụ phía Google trục trặc, **không phải lỗi của ta**.
+///
+/// Tách khỏi <see cref="ExtractorQuotaException"/> vì hai mã này xử lý **ngược nhau**, và nhầm
+/// hướng nào cũng tốn:
+/// <list type="bullet">
+/// <item><c>5xx</c> là **tạm thời** — thử lại một lần thường là ăn, và không tốn gì thêm nếu
+/// không ăn.</item>
+/// <item><c>429</c> là **hết hạn mức trong ngày** — thử lại chỉ tiêu thêm quota mà kết quả
+/// vẫn thế.</item>
+/// </list>
+///
+/// Cũng không được lẫn vào <c>extract_failed</c>: câu "thử chụp lại rõ hơn" bảo người dùng làm
+/// đúng việc vô ích, trong khi thứ họ cần làm là đợi vài giây.
+/// </summary>
+public sealed class ExtractorUnavailableException(Exception? inner = null)
+    : ExtractorException("extract_unavailable", "Dịch vụ đang quá tải. Thử lại sau vài giây.", inner);
+
+/// <summary>
 /// <c>400 API_KEY_INVALID</c> — vấn đề **cấu hình**, không phải lỗi tấm ảnh.
 ///
 /// Tách riêng vì thông báo "thử chụp lại rõ hơn" ở đây là sai hướng hoàn toàn: chụp bao nhiêu lần

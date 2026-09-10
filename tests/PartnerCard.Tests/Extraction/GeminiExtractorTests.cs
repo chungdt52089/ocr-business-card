@@ -54,7 +54,13 @@ public sealed class GeminiExtractorTests
         return card.ToJsonString();
     }
 
-    private static GeminiExtractor Create(StubHttpHandler handler, int timeoutSeconds = 20) =>
+    /// <summary>
+    /// <paramref name="retryDelay"/> mặc định bằng 0 trong test: nhịp đợi 2 giây thật chỉ làm bộ
+    /// test chậm đi mà không kiểm thêm được gì. Riêng một ca dưới đây truyền giá trị thật để
+    /// khẳng định nhịp đợi có xảy ra.
+    /// </summary>
+    private static GeminiExtractor Create(
+        StubHttpHandler handler, int timeoutSeconds = 20, TimeSpan? retryDelay = null) =>
         new(
             new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan },
             new SecretOptions { GeminiApiKey = DummyKey },
@@ -62,7 +68,8 @@ public sealed class GeminiExtractorTests
             {
                 Extractor = ExtractorNames.Gemini,
                 ExtractTimeoutSeconds = timeoutSeconds,
-            }));
+            }),
+            retryDelay ?? TimeSpan.Zero);
 
     private static Task<RawExtraction> ExtractRaw(GeminiExtractor extractor, CancellationToken ct = default) =>
         extractor.ExtractRawAsync(new byte[] { 1, 2, 3 }, "image/jpeg", null, "ja-01.jpg", ct);
@@ -99,16 +106,115 @@ public sealed class GeminiExtractorTests
     }
 
     [Fact]
-    public async Task Loi_khac_khong_bi_gan_nham_thanh_ba_kieu_rieng()
+    public async Task Loi_khong_thuoc_ho_nao_khong_bi_gan_nham_thanh_kieu_rieng()
     {
+        // 404 không phải quota, không phải auth, cũng không phải 5xx đáng thử lại.
         var handler = StubHttpHandler.Returns(
-            HttpStatusCode.InternalServerError, """{"error":{"code":500}}""");
+            HttpStatusCode.NotFound,
+            """{"error":{"code":404,"status":"NOT_FOUND","message":"models/abc is not found"}}""");
 
         var thrown = await Record.ExceptionAsync(async () => await ExtractRaw(Create(handler)));
 
-        // 500 là lỗi lạ — đường ống biến nó thành extract_failed, không phải quota hay auth.
         thrown.Should().NotBeNull().And.NotBeAssignableTo<ExtractorException>();
-        handler.Calls.Should().Be(1);
+        handler.Calls.Should().Be(1, "chỉ 5xx mới được thử lại");
+        thrown!.Message.Should().Contain("404")
+            .And.Contain("NOT_FOUND")
+            .And.Contain("models/abc is not found");
+    }
+
+    // =====================================================================================
+    // 5xx — quá tải phía Google, xử lý NGƯỢC với 429
+    // =====================================================================================
+
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    [InlineData(HttpStatusCode.GatewayTimeout)]
+    public async Task Ca_ho_5xx_thu_lai_dung_MOT_lan_roi_nem_ExtractorUnavailableException(
+        HttpStatusCode status)
+    {
+        var handler = StubHttpHandler.Returns(
+            status, """{"error":{"status":"UNAVAILABLE","message":"The model is overloaded."}}""");
+
+        var act = async () => await ExtractRaw(Create(handler));
+
+        var thrown = await act.Should().ThrowAsync<ExtractorUnavailableException>();
+        thrown.Which.Code.Should().Be("extract_unavailable");
+
+        handler.Calls.Should().Be(2, "một lần đầu cộng đúng một lần thử lại");
+    }
+
+    [Fact]
+    public async Task Het_han_muc_van_dung_MOT_loi_goi_du_5xx_duoc_thu_lai()
+    {
+        // Hai mã này cố ý đi ngược nhau: quá tải là tạm thời, hết hạn mức là chuyện cả ngày.
+        var handler = StubHttpHandler.Returns(
+            HttpStatusCode.TooManyRequests, """{"error":{"status":"RESOURCE_EXHAUSTED"}}""");
+
+        await Record.ExceptionAsync(async () => await ExtractRaw(Create(handler)));
+
+        handler.Calls.Should().Be(1, "thử lại 429 chỉ tiêu thêm quota mà kết quả vẫn thế");
+    }
+
+    [Fact]
+    public async Task Lan_thu_lai_an_thi_tra_ve_ket_qua_binh_thuong()
+    {
+        var responses = new Queue<HttpResponseMessage>(
+        [
+            new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            {
+                Content = new StringContent("""{"error":{"message":"overloaded"}}"""),
+            },
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(Envelope(ModelCard())),
+            },
+        ]);
+
+        var handler = new StubHttpHandler((_, _) => Task.FromResult(responses.Dequeue()));
+
+        var raw = await ExtractRaw(Create(handler));
+
+        JsonNode.Parse(raw.Json)!.AsObject().Select(pair => pair.Key)
+            .Should().BeEquivalentTo(CardSchema.AllowedKeys);
+        handler.Calls.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Truoc_khi_thu_lai_co_doi_mot_nhip()
+    {
+        var handler = StubHttpHandler.Returns(
+            HttpStatusCode.ServiceUnavailable, """{"error":{"message":"overloaded"}}""");
+
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+
+        await Record.ExceptionAsync(async () =>
+            await ExtractRaw(Create(handler, retryDelay: TimeSpan.FromMilliseconds(300))));
+
+        System.Diagnostics.Stopwatch.GetElapsedTime(started)
+            .Should().BeGreaterThanOrEqualTo(TimeSpan.FromMilliseconds(250),
+                "thử lại tức thì thì lần hai gặp đúng cái máy chủ vẫn đang quá tải");
+    }
+
+    [Fact]
+    public async Task Nguoi_dung_thay_cau_trung_tinh_con_ly_do_that_nam_o_inner()
+    {
+        var handler = StubHttpHandler.Returns(
+            HttpStatusCode.ServiceUnavailable,
+            """{"error":{"status":"UNAVAILABLE","message":"The model is overloaded. Try again later."}}""");
+
+        var thrown = (ExtractorUnavailableException)(await Record.ExceptionAsync(
+            async () => await ExtractRaw(Create(handler))))!;
+
+        // Thứ đi ra màn hình: trung tính, và KHÔNG bảo người dùng chụp lại.
+        thrown.Message.Should().Be("Dịch vụ đang quá tải. Thử lại sau vài giây.");
+        thrown.Message.Should().NotContain("503").And.NotContain("overloaded");
+
+        // Thứ đi vào log gỡ rối và ca Live: lý do thật.
+        thrown.InnerException!.Message.Should().Contain("503")
+            .And.Contain("UNAVAILABLE")
+            .And.Contain("The model is overloaded.");
     }
 
     // =====================================================================================
@@ -201,6 +307,48 @@ public sealed class GeminiExtractorTests
             .Should().Be(CardSchema.ResponseSchema().ToJsonString());
 
         handler.LastApiKey.Should().Be(DummyKey, "khoá đi trong header x-goog-api-key, không trong URL");
+    }
+
+    [Fact]
+    public async Task generationConfig_ha_muc_suy_luan_va_mo_rong_ngan_sach_dau_ra()
+    {
+        var handler = StubHttpHandler.Ok(Envelope(ModelCard()));
+
+        await ExtractRaw(Create(handler));
+
+        var config = JsonNode.Parse(handler.LastBody!)!["generationConfig"]!;
+
+        // gemini-3.8-flash mặc định medium và không cho tắt hẳn, nên low là cửa thấp nhất có.
+        config["thinkingConfig"]!["thinkingLevel"]!.GetValue<string>()
+            .Should().Be(GeminiExtractor.ThinkingLevel).And.Be("low");
+
+        // Token suy luận dùng chung ngân sách với token đầu ra — để chật là mời gọi cảnh
+        // "finishReason MAX_TOKENS mà parts rỗng".
+        config["maxOutputTokens"]!.GetValue<int>().Should().BeGreaterThanOrEqualTo(4096);
+    }
+
+    [Fact]
+    public async Task Thieu_parts_thi_thong_bao_noi_ro_vi_sao_nhung_khong_lo_noi_dung_the()
+    {
+        // Đúng hình dạng đã làm hỏng lần chạy thật thứ ba: nghĩ hết ngân sách, không còn chỗ viết.
+        var handler = StubHttpHandler.Ok("""
+            {
+              "candidates": [ { "content": { "role": "model" }, "finishReason": "MAX_TOKENS" } ],
+              "usageMetadata": { "promptTokenCount": 1801, "thoughtsTokenCount": 8192,
+                                 "totalTokenCount": 9993 }
+            }
+            """);
+
+        var thrown = await Record.ExceptionAsync(async () => await ExtractRaw(Create(handler)));
+
+        // Thông báo này KHÔNG tới người dùng — CardPipeline thay bằng câu trung tính của
+        // extract_failed. Nó chỉ để ca Live và log gỡ rối phân biệt được nguyên nhân.
+        thrown!.Message.Should().Contain("MAX_TOKENS")
+            .And.Contain("thoughtsTokenCount=8192")
+            .And.Contain("parts=0");
+
+        // Không phải quota/auth/timeout — đường ống trả extract_failed.
+        thrown.Should().NotBeAssignableTo<ExtractorException>();
     }
 
     // =====================================================================================
