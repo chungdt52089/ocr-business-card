@@ -49,6 +49,36 @@ public sealed class SteppingClock : TimeProvider
     }
 }
 
+/// <summary>
+/// Dựng <see cref="CardExtractionResult"/> hợp lệ để ca kiểm thử chỉ phải nêu thứ nó quan tâm.
+/// </summary>
+public static class CardBuilder
+{
+    public static CardExtractionResult Valid() => new(
+        IsBusinessCard: true,
+        RejectReason: string.Empty,
+        FullName: "Marcus Feld",
+        JobTitle: "Operations Director",
+        Company: "Halbrook Logistics",
+        Phones: ["+15550142887"],
+        Emails: ["m.feld@halbrook-logistics.example"],
+        Website: "https://halbrook-logistics.example",
+        Address: "418 Kestrel Avenue, Suite 12, Portland OR 97205",
+        DetectedLanguage: "en",
+        SearchAlias: string.Empty,
+        FieldConfidence: new Dictionary<string, double>(StringComparer.Ordinal)
+        {
+            ["fullName"] = 1.0,
+            ["jobTitle"] = 1.0,
+            ["company"] = 1.0,
+            ["phones"] = 1.0,
+            ["emails"] = 1.0,
+            ["website"] = 1.0,
+            ["address"] = 1.0,
+            ["searchAlias"] = 0.0,
+        });
+}
+
 /// <summary>Dựng <see cref="Partner"/> hợp lệ để ca kiểm thử chỉ phải nêu thứ nó quan tâm.</summary>
 public static class PartnerFactory
 {
