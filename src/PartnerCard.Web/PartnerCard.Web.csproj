@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PartnerCard.Web</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Test chạm được lớp nội bộ, không phải mở public chỉ để kiểm thử (SPEC mục 2). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PartnerCard.Tests" />
+  </ItemGroup>
+
+  <!--
+    Bảng đáp án chỉ có một bản duy nhất, ở tests/ (SPEC mục 2: nó thuộc Code\ vì FakeExtractor
+    đọc nó lúc chạy). Chép sang output để chế độ fake chạy được dù working directory là đâu.
+  -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\..\tests\PartnerCard.Tests\TestData\cards\expected.json"
+          Link="fakedata\expected.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
