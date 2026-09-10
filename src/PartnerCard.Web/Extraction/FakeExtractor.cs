@@ -1,5 +1,4 @@
-using System.Text.Encodings.Web;
-using System.Text.Json;
+using PartnerCard.Web.Configuration;
 using PartnerCard.Web.Models;
 
 namespace PartnerCard.Web.Extraction;
@@ -25,11 +24,12 @@ public sealed class FakeExtractor(ExpectedCards cards) : IExtractor
     public const string NotABusinessCardReason =
         "Ảnh này không phải danh thiếp.";
 
-    private static readonly JsonSerializerOptions RawOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
+    /// <summary>
+    /// Số đo của bản cài này: không token nào, không độ trễ nào — nhưng <c>Model</c> là
+    /// <c>"fake"</c> chứ **không** phải <c>"-"</c>. Nó đã thực sự chạy và thực sự sinh ra kết quả;
+    /// <c>ExtractionUsage.Untracked</c> mới là "không ai chạy cả" (SPEC mục 4.1).
+    /// </summary>
+    public static readonly ExtractionUsage Usage = new(0, 0, 0, ExtractorNames.Fake, "-");
 
     public Task<CardExtractionResult> ExtractAsync(
         ReadOnlyMemory<byte> imageBytes,
@@ -55,7 +55,7 @@ public sealed class FakeExtractor(ExpectedCards cards) : IExtractor
     /// chế độ fake — đúng và không tránh được: một bản cài giả không tự sinh ra khoá lạ.
     /// Ca G-14 dùng <c>HostileExtractor</c> chính là để bù chỗ đó.
     /// </summary>
-    public async Task<string> ExtractRawAsync(
+    public async Task<RawExtraction> ExtractRawAsync(
         ReadOnlyMemory<byte> imageBytes,
         string mimeType,
         string? languageHint,
@@ -64,24 +64,7 @@ public sealed class FakeExtractor(ExpectedCards cards) : IExtractor
     {
         var card = await ExtractAsync(imageBytes, mimeType, languageHint, sourceName, ct);
 
-        // Warnings không thuộc schema mục 4.4, và guard sẽ coi nó là khoá lạ. Bỏ ra trước.
-        return JsonSerializer.Serialize(
-            new
-            {
-                isBusinessCard = card.IsBusinessCard,
-                rejectReason = card.RejectReason,
-                fullName = card.FullName,
-                jobTitle = card.JobTitle,
-                company = card.Company,
-                phones = card.Phones,
-                emails = card.Emails,
-                website = card.Website,
-                address = card.Address,
-                detectedLanguage = card.DetectedLanguage,
-                searchAlias = card.SearchAlias,
-                fieldConfidence = card.FieldConfidence,
-            },
-            RawOptions);
+        return new RawExtraction(CardJson.Serialize(card, indented: true), Usage);
     }
 
     /// <summary>

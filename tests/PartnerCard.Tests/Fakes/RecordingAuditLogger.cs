@@ -18,7 +18,8 @@ public sealed class CountingExtractor(PartnerCard.Web.Extraction.IExtractor inne
 {
     public int Calls { get; private set; }
 
-    public Task<string> ExtractRawAsync(
+    // Chuyển tiếp nguyên số đo của bản cài bên trong: nó mới là bên thực sự chạy.
+    public Task<PartnerCard.Web.Extraction.RawExtraction> ExtractRawAsync(
         ReadOnlyMemory<byte> imageBytes, string mimeType, string? languageHint,
         string? sourceName, CancellationToken ct)
     {

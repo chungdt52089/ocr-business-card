@@ -275,4 +275,51 @@ public sealed class CardPipelineTests
         var stored = await harness.Store.SearchAsync(new PartnerQuery(), CancellationToken.None);
         stored.Should().HaveCount(1);
     }
+
+    // =====================================================================================
+    // Số đo của lần gọi — SPEC mục 4.1
+    // =====================================================================================
+
+    [Fact]
+    public async Task Nhanh_trich_xuat_mang_theo_so_do_cua_ban_cai_dang_chay()
+    {
+        using var harness = new Harness();
+
+        var outcome = await harness.Pipeline.ExtractAsync(
+            Base64Of("en-01.png"), "image/png", null, "en-01.png", CancellationToken.None);
+
+        // "fake" nghĩa là FakeExtractor đã chạy thật — nó chỉ không tốn token nào.
+        outcome.Usage.Model.Should().Be("fake");
+        outcome.Usage.TokensIn.Should().Be(0);
+        outcome.Usage.TokensOut.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Duong_loi_khong_bia_ra_so_do()
+    {
+        using var harness = new Harness();
+
+        var outcome = await harness.Pipeline.ExtractAsync(
+            Base64Of("en-01.png"), "image/gif", null, "en-01.gif", CancellationToken.None);
+
+        // Validate chặn trước khi chạm tới extractor, nên không có lần gọi nào để mà đo.
+        outcome.Usage.Should().Be(ExtractionUsage.Untracked);
+    }
+
+    [Fact]
+    public void Ho_so_nhap_tay_khong_duoc_ghi_model_fake()
+    {
+        var draft = new PartnerDraft(
+            PartnerId: null,
+            Card: CardExtractionResult.NotACard("chưa dùng tới"),
+            SourceImage: "images/tay.jpg",
+            ImageSha256: "sha",
+            EditedFields: []);
+
+        // Không truyền Usage nghĩa là KHÔNG AI CHẠY CẢ, khác hẳn với "FakeExtractor đã chạy".
+        draft.Usage.Should().Be(ExtractionUsage.Untracked);
+        draft.Usage.Model.Should().Be("-");
+        draft.Usage.Model.Should().NotBe(FakeExtractor.Usage.Model,
+            "ghi model \"fake\" cho hồ sơ người tự gõ là nói dối về nguồn gốc dữ liệu");
+    }
 }

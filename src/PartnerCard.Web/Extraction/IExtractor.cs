@@ -11,14 +11,19 @@ namespace PartnerCard.Web.Extraction;
 public interface IExtractor
 {
     /// <summary>
-    /// Trả **chuỗi JSON thô**, chưa deserialize. Đây là thứ <c>CardPipeline</c> dùng.
+    /// Trả **chuỗi JSON thô** chưa deserialize, kèm số đo của lần gọi. Đây là thứ
+    /// <c>CardPipeline</c> dùng.
     ///
     /// Cần nó vì SPEC mục 2 và mục 7 đặt guard **trước** bước deserialize: khoá lạ chỉ tồn tại
     /// trong chuỗi mô hình gửi về, deserialize vào record C# là chúng bị nuốt im lặng và SG-1
     /// không bao giờ kích hoạt được nữa. <see cref="ExtractAsync"/> ở dưới đã deserialize rồi,
     /// nên nó **không** dùng được cho đường ống.
+    ///
+    /// Ba tình huống dưới đây phải ném **kiểu riêng**, không được nuốt thành kết quả rỗng, để
+    /// <c>CardPipeline</c> phân biệt được mà không cần biết bản cài nào đang chạy (SPEC mục 4.1):
+    /// <c>ExtractorQuotaException</c>, <c>ExtractorTimeoutException</c>, <c>ExtractorAuthException</c>.
     /// </summary>
-    Task<string> ExtractRawAsync(
+    Task<RawExtraction> ExtractRawAsync(
         ReadOnlyMemory<byte> imageBytes,
         string mimeType,
         string? languageHint,

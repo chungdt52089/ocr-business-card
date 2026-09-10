@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Text.Encodings.Web;
-using System.Text.Json;
 using Microsoft.Extensions.Options;
 using PartnerCard.Web.Audit;
 using PartnerCard.Web.Configuration;
@@ -37,11 +35,6 @@ public sealed class CardPipeline(
     private const string ExtractTool = "extract_business_card";
     private const string SaveTool = "save_partner";
 
-    private static readonly JsonSerializerOptions DtoOptions = new(JsonSerializerDefaults.Web)
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
-
     private PartnerCardOptions Options => options.Value;
 
     public async Task<ExtractOutcome> ExtractAsync(
@@ -64,11 +57,11 @@ public sealed class CardPipeline(
         try
         {
             // ---- Extract ------------------------------------------------------------
-            var rawJson = await extractor.ExtractRawAsync(
+            var raw = await extractor.ExtractRawAsync(
                 validation.Bytes, mimeType, languageHint, sourceName, ct);
 
             // ---- Guard trên JSON thô, TRƯỚC khi deserialize -------------------------
-            var verdict = guard.Check(rawJson, GuardBranch.Extraction);
+            var verdict = guard.Check(raw.Json, GuardBranch.Extraction);
             if (verdict.IsBlocked)
             {
                 // Chặn là chặn. Không thử lại — thử lại chỉ tiêu thêm hạn mức mà kết quả vẫn thế (G-13).
@@ -84,7 +77,7 @@ public sealed class CardPipeline(
             }
 
             // ---- deserialize --------------------------------------------------------
-            var card = JsonSerializer.Deserialize<CardExtractionResult>(verdict.CleanedJson!, DtoOptions);
+            var card = CardJson.Deserialize(verdict.CleanedJson!);
             if (card is null)
             {
                 return Rejected("guard_blocked", "Kết quả đọc được không hợp lệ nên đã bị chặn.");
@@ -114,7 +107,11 @@ public sealed class CardPipeline(
                 ReviewFields: scored.ReviewFields,
                 ErrorCode: null,
                 Message: null,
-                Warnings: verdict.Warnings);
+                Warnings: verdict.Warnings)
+            {
+                // Đi tiếp tới màn hình xác nhận rồi quay lại ở PartnerDraft khi người dùng bấm Lưu.
+                Usage = raw.Usage,
+            };
         }
         catch (OperationCanceledException)
         {
@@ -143,7 +140,7 @@ public sealed class CardPipeline(
             var card = scored.Card with { FieldConfidence = scored.FieldConfidence };
 
             // ---- Guard trên DTO đã serialize -----------------------------------------
-            var verdict = guard.Check(Serialize(card), GuardBranch.Save);
+            var verdict = guard.Check(CardJson.Serialize(card), GuardBranch.Save);
             if (verdict.IsBlocked)
             {
                 LogGuardBlock(session, SaveTool, verdict, Elapsed(started));
@@ -242,25 +239,6 @@ public sealed class CardPipeline(
             BlockCode: verdict.BlockCode,
             Warnings: verdict.Warnings.Count,
             LatencyMs: latencyMs));
-
-    private static string Serialize(CardExtractionResult card) =>
-        JsonSerializer.Serialize(
-            new
-            {
-                isBusinessCard = card.IsBusinessCard,
-                rejectReason = card.RejectReason,
-                fullName = card.FullName,
-                jobTitle = card.JobTitle,
-                company = card.Company,
-                phones = card.Phones,
-                emails = card.Emails,
-                website = card.Website,
-                address = card.Address,
-                detectedLanguage = card.DetectedLanguage,
-                searchAlias = card.SearchAlias,
-                fieldConfidence = card.FieldConfidence,
-            },
-            DtoOptions);
 
     private static ExtractOutcome Rejected(string code, string message) =>
         new(false, null, [], code, message, []);
