@@ -99,7 +99,11 @@ public sealed class CardPipeline(
                 FieldsFilled: CountFilled(scored.FieldConfidence),
                 AvgConfidence: Average(scored.FieldConfidence),
                 Warnings: verdict.Warnings.Count,
-                LatencyMs: Elapsed(started)));
+                LatencyMs: Elapsed(started),
+                TokensIn: raw.Usage.TokensIn,
+                TokensOut: raw.Usage.TokensOut,
+                Model: raw.Usage.Model,
+                PromptVersion: raw.Usage.PromptVersion));
 
             return new ExtractOutcome(
                 Ok: true,
@@ -113,13 +117,27 @@ public sealed class CardPipeline(
                 Usage = raw.Usage,
             };
         }
+        catch (ExtractorException ex)
+        {
+            // Đứng trước CẢ mắt OperationCanceledException bên dưới, không chỉ trước
+            // catch (Exception): timeout của HttpClient chính là TaskCanceledException, mà mắt
+            // đó thì rethrow — để sau là timeout bay thẳng ra khỏi đường ống (SPEC mục 4.1).
+            //
+            // Không thử lại. Với 429 thì thử lại chỉ tiêu thêm hạn mức mà kết quả vẫn thế.
+            LogExtractError(sessionId, ex.Code, Elapsed(started));
+
+            return Rejected(ex.Code, ex.Message);
+        }
         catch (OperationCanceledException)
         {
+            // Người dùng huỷ là việc của người gọi, không phải lỗi để nuốt thành kết quả.
             throw;
         }
         catch (Exception)
         {
             // Thông báo trung tính, không lộ chi tiết nội bộ (SPEC mục 10.3).
+            LogExtractError(sessionId, "extract_failed", Elapsed(started));
+
             return Rejected("extract_failed", "Không đọc được ảnh này. Thử chụp lại rõ hơn.");
         }
     }
@@ -218,16 +236,32 @@ public sealed class CardPipeline(
             ImageSha256: draft.ImageSha256,
             FieldConfidence: card.FieldConfidence,
             EditedFields: draft.EditedFields,
+            // Số đo đi từ lần trích xuất, qua màn hình xác nhận, tới đây (SPEC mục 4.1).
+            // Nhánh lưu không trích xuất nên tự nó không biết gì về lời gọi mô hình; đọc cấu
+            // hình thay cho số thật là ghi "đã gọi gemini" cho cả hồ sơ người tự gõ.
             Extraction: new ExtractionMeta(
-                Model: Options.Extractor == ExtractorNames.Gemini ? Options.Model : ExtractorNames.Fake,
-                PromptVersion: Options.PromptVersion,
+                Model: draft.Usage.Model,
+                PromptVersion: draft.Usage.PromptVersion,
                 ExtractedAt: now,
-                LatencyMs: 0),
+                LatencyMs: draft.Usage.LatencyMs),
             // Lưu là hành vi sau khi người đã xác nhận ở màn hình /review (US-03).
             Status: PartnerStatus.Confirmed,
             CreatedAt: now,
             UpdatedAt: now);
     }
+
+    /// <summary>
+    /// Trích xuất hỏng thì vẫn ghi một dòng — lời gọi này **đã chạm tới mô hình**, khác với việc
+    /// Validate từ chối (SPEC mục 2). Chỉ ghi mã lỗi, không ghi gì của tấm thẻ.
+    /// </summary>
+    private void LogExtractError(string sessionId, string errorCode, int latencyMs) =>
+        audit.Log(new AuditEntry(
+            Timestamp: clock.GetUtcNow(),
+            SessionId: sessionId,
+            Tool: ExtractTool,
+            Level: AuditLevel.Error,
+            LatencyMs: latencyMs,
+            ErrorCode: errorCode));
 
     private void LogGuardBlock(string sessionId, string tool, GuardResult verdict, int latencyMs) =>
         audit.Log(new AuditEntry(

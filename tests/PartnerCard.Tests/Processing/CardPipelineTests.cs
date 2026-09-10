@@ -306,6 +306,100 @@ public sealed class CardPipelineTests
         outcome.Usage.Should().Be(ExtractionUsage.Untracked);
     }
 
+    // =====================================================================================
+    // Ba kiểu lỗi của extractor — SPEC mục 4.1 và 4.6
+    // =====================================================================================
+
+    [Theory]
+    [InlineData("quota")]
+    [InlineData("timeout")]
+    [InlineData("auth")]
+    public async Task Ba_kieu_loi_ra_ba_ma_rieng_va_khong_exception_nao_thoat_ra(string kind)
+    {
+        var (thrown, expectedCode) = kind switch
+        {
+            "quota" => ((Exception)new ExtractorQuotaException(), "quota_exhausted"),
+            "timeout" => (new ExtractorTimeoutException(), "extract_timeout"),
+            _ => (new ExtractorAuthException(), "extractor_auth"),
+        };
+
+        var extractor = new ThrowingExtractor(thrown);
+        using var harness = new Harness(extractor);
+
+        var outcome = await harness.Pipeline.ExtractAsync(
+            Base64Of("en-01.png"), "image/png", null, "en-01.png", CancellationToken.None);
+
+        outcome.Ok.Should().BeFalse();
+        outcome.ErrorCode.Should().Be(expectedCode);
+        outcome.Message.Should().NotBeNullOrEmpty();
+        outcome.Card.Should().BeNull();
+
+        // Không có lần gọi nào thành công thì không có gì để đo.
+        outcome.Usage.Should().Be(ExtractionUsage.Untracked);
+
+        // Thử lại chỉ tiêu thêm hạn mức mà kết quả vẫn thế — đúng với cả ba, nặng nhất ở 429.
+        extractor.Calls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Loi_extractor_ghi_mot_dong_audit_muc_Error_kem_ma_ly_do()
+    {
+        using var harness = new Harness(new ThrowingExtractor(new ExtractorQuotaException()));
+
+        await harness.Pipeline.ExtractAsync(
+            Base64Of("en-01.png"), "image/png", null, "en-01.png", CancellationToken.None);
+
+        var entry = harness.Audit.Entries.Should().ContainSingle().Which;
+        entry.Level.Should().Be(AuditLevel.Error);
+        entry.ErrorCode.Should().Be("quota_exhausted");
+
+        // errorCode và blockCode là hai chuyện khác nhau: chưa hề có kết quả nào để mà chặn.
+        entry.BlockCode.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Loi_la_khong_doan_duoc_van_thanh_ket_qua_co_cau_truc()
+    {
+        using var harness = new Harness(new ThrowingExtractor(new InvalidOperationException("chi tiết nội bộ")));
+
+        var outcome = await harness.Pipeline.ExtractAsync(
+            Base64Of("en-01.png"), "image/png", null, "en-01.png", CancellationToken.None);
+
+        outcome.ErrorCode.Should().Be("extract_failed");
+        outcome.Message.Should().NotContain("chi tiết nội bộ", "SPEC mục 10.3: thông báo trung tính");
+        harness.Audit.Entries.Should().ContainSingle().Which.Level.Should().Be(AuditLevel.Error);
+    }
+
+    [Fact]
+    public async Task Nguoi_dung_huy_that_thi_van_thoat_ra_nguyen_dang()
+    {
+        // Ranh giới cố ý: việc huỷ là của người gọi, không phải một lỗi để nuốt thành kết quả.
+        // Chính vì mắt catch này mà GeminiExtractor phải tự đổi timeout của nó thành
+        // ExtractorTimeoutException — để nguyên TaskCanceledException là bay ra khỏi đường ống.
+        using var harness = new Harness(new ThrowingExtractor(new OperationCanceledException()));
+
+        var act = async () => await harness.Pipeline.ExtractAsync(
+            Base64Of("en-01.png"), "image/png", null, "en-01.png", CancellationToken.None);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task Trich_xuat_thanh_cong_ghi_token_va_do_tre_vao_audit()
+    {
+        using var harness = new Harness();
+
+        await harness.Pipeline.ExtractAsync(
+            Base64Of("en-01.png"), "image/png", null, "en-01.png", CancellationToken.None);
+
+        var entry = harness.Audit.Entries.Should().ContainSingle().Which;
+        entry.Level.Should().Be(AuditLevel.Info);
+        entry.Model.Should().Be("fake");
+        entry.PromptVersion.Should().Be("-");
+        entry.TokensIn.Should().Be(0, "bản cài offline không tiêu token nào");
+        entry.ErrorCode.Should().BeNull();
+    }
+
     [Fact]
     public void Ho_so_nhap_tay_khong_duoc_ghi_model_fake()
     {
@@ -321,5 +415,46 @@ public sealed class CardPipelineTests
         draft.Usage.Model.Should().Be("-");
         draft.Usage.Model.Should().NotBe(FakeExtractor.Usage.Model,
             "ghi model \"fake\" cho hồ sơ người tự gõ là nói dối về nguồn gốc dữ liệu");
+    }
+
+    [Fact]
+    public async Task Ho_so_luu_mang_dung_so_do_cua_lan_trich_xuat()
+    {
+        using var harness = new Harness();
+
+        var extracted = await harness.Pipeline.ExtractAsync(
+            Base64Of("en-01.png"), "image/png", null, "en-01.png", CancellationToken.None);
+
+        // Đây chính là chỗ màn hình /review phải nối lại ở T-13: giữ outcome.Usage rồi gửi kèm.
+        var draft = new PartnerDraft(null, extracted.Card!, "images/en-01.png", "sha", [])
+        {
+            Usage = extracted.Usage,
+        };
+
+        var saved = await harness.Pipeline.SaveAsync(draft, "s1", CancellationToken.None);
+        var stored = await harness.Store.GetAsync(saved.PartnerId!, CancellationToken.None);
+
+        stored!.Extraction.Model.Should().Be("fake");
+        stored.Extraction.PromptVersion.Should().Be("-");
+    }
+
+    [Fact]
+    public async Task Quen_noi_Usage_thi_ho_so_ghi_dau_gach_chu_khong_bia_ra_gemini()
+    {
+        using var harness = new Harness();
+
+        var extracted = await harness.Pipeline.ExtractAsync(
+            Base64Of("en-01.png"), "image/png", null, "en-01.png", CancellationToken.None);
+
+        // Cố tình KHÔNG nối Usage — đúng cái bẫy T-13 phải tránh.
+        var saved = await harness.Pipeline.SaveAsync(
+            new PartnerDraft(null, extracted.Card!, "images/en-01.png", "sha", []),
+            "s1", CancellationToken.None);
+
+        var stored = await harness.Store.GetAsync(saved.PartnerId!, CancellationToken.None);
+
+        // Lưu vẫn êm — đó chính là lý do T-13 cần một ca riêng khẳng định việc nối đã xảy ra.
+        stored!.Extraction.Model.Should().Be("-");
+        stored.Extraction.LatencyMs.Should().Be(0);
     }
 }
