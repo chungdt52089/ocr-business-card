@@ -7,9 +7,15 @@
     <RootNamespace>PartnerCard.Web</RootNamespace>
   </PropertyGroup>
 
-  <!-- Test chạm được lớp nội bộ, không phải mở public chỉ để kiểm thử (SPEC mục 2). -->
+  <!--
+    Test chạm được lớp nội bộ, không phải mở public chỉ để kiểm thử (SPEC mục 2).
+    Bộ đo (T-08) cũng ở đây vì nó cần TextKeys.Collapse để so trường chữ theo luật
+    SPEC mục 14 ("gộp khoảng trắng, bỏ dấu chấm cuối") — mở public một hàm chỉ để
+    một công cụ nội bộ dùng thì đắt hơn là thêm một dòng ở đây.
+  -->
   <ItemGroup>
     <InternalsVisibleTo Include="PartnerCard.Tests" />
+    <InternalsVisibleTo Include="PartnerCard.Eval" />
   </ItemGroup>
 
   <!--

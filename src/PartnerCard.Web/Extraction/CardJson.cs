@@ -38,7 +38,12 @@ public static class CardJson
     public static string Serialize(CardExtractionResult card, bool indented = false) =>
         JsonSerializer.Serialize(card, indented ? Indented : Compact);
 
-    /// <summary>Trả <c>null</c> khi chuỗi không dựng được thành thẻ — người gọi quyết định làm gì.</summary>
+    /// <summary>
+    /// Trả <c>null</c> khi chuỗi là <c>null</c> theo nghĩa JSON. Chuỗi **hỏng cú pháp** thì ném
+    /// <c>JsonException</c> chứ không trả <c>null</c> — người gọi phải bắt cả hai. <c>CardPipeline</c>
+    /// không gặp trường hợp sau vì SG-0 đã chặn chuỗi không phải JSON trước khi tới đây; bộ đo thì
+    /// không qua guard nên nó bắt <c>JsonException</c> và ghi thành <c>bad_json</c>.
+    /// </summary>
     public static CardExtractionResult? Deserialize(string json) =>
         JsonSerializer.Deserialize<CardExtractionResult>(json, Compact);
 }
