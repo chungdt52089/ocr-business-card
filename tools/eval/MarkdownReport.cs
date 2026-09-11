@@ -13,6 +13,8 @@ public sealed record ReportContext(
     bool IsFake,
     bool IsRenderedFallback,
     TimeSpan Delay,
+    string DelayBasis,
+    bool RetryEnabled,
     DateTimeOffset At);
 
 /// <summary>
@@ -103,7 +105,8 @@ public static class MarkdownReport
             : $"promptVersion : {context.PromptVersion} — {context.PromptVersionNote}");
         report.AppendLine(CultureInfo.InvariantCulture, $"thinkingLevel : {context.ThinkingLevel}");
         report.AppendLine(CultureInfo.InvariantCulture, $"ảnh           : {context.ImageDirectory}");
-        report.AppendLine(CultureInfo.InvariantCulture, $"nghỉ giữa lượt: {Num((int)context.Delay.TotalSeconds)}s");
+        report.AppendLine($"nghỉ giữa lượt: {Num((int)context.Delay.TotalSeconds)}s ({context.DelayBasis})");
+        report.AppendLine($"thử lại trần phút: {(context.RetryEnabled ? "có, chờ 60s, đúng một lần" : "không (--no-retry)")}");
         report.AppendLine("```");
         report.AppendLine();
 
@@ -157,6 +160,13 @@ public static class MarkdownReport
         {
             line.Append(CultureInfo.InvariantCulture,
                 $" · {Num(skipped.Count)} chưa gọi ({skipped[0].ErrorCode})");
+        }
+
+        var retried = runs.Count(run => run.Retried);
+
+        if (retried > 0)
+        {
+            line.Append(CultureInfo.InvariantCulture, $" · {Num(retried)} phải chờ trần phút rồi gọi lại");
         }
 
         line.Append("**");
@@ -343,6 +353,39 @@ public static class MarkdownReport
             report.AppendLine($"| {run.CardCode} | *(cả thẻ)* | — | `{run.ErrorCode}` | |");
         }
 
+        report.AppendLine();
+        AppendErrorDetails(report, broken);
+    }
+
+    /// <summary>
+    /// Thông điệp lỗi **thật** của API, lấy từ <c>InnerException</c>.
+    ///
+    /// Mã lỗi một mình không đủ để gỡ rối: <c>quota_exhausted</c> không nói vấp vào trần phút hay
+    /// trần ngày, của model nào, còn bao nhiêu. <c>error.status</c> và <c>error.message</c> của
+    /// Google nói đủ cả. Đây là siêu dữ liệu của API chứ **không phải nội dung danh thiếp**, nên
+    /// ghi ra đây không phạm mục 12 — và nó là thứ duy nhất biến một lượt đo hỏng thành một lượt
+    /// đo có thể lần ra nguyên nhân.
+    /// </summary>
+    private static void AppendErrorDetails(StringBuilder report, IReadOnlyList<CardRun> broken)
+    {
+        var detailed = broken.Where(run => !string.IsNullOrWhiteSpace(run.ErrorDetail)).ToList();
+
+        if (detailed.Count == 0)
+        {
+            return;
+        }
+
+        report.AppendLine("Thông điệp lỗi thật của API — không phải câu trung tính viết cho người dùng cuối:");
+        report.AppendLine();
+        report.AppendLine("```");
+
+        foreach (var run in detailed)
+        {
+            report.AppendLine($"{run.CardCode} [{run.ErrorCode}]");
+            report.AppendLine($"  {run.ErrorDetail!.ReplaceLineEndings(" ")}");
+        }
+
+        report.AppendLine("```");
         report.AppendLine();
     }
 

@@ -21,6 +21,12 @@ public sealed record EvalOptions
     /// <summary>Đè thư mục ảnh.</summary>
     public string? Dir { get; init; }
 
+    /// <summary>Đè <c>PartnerCard:Model</c> — để so hai model mà chỉ khác đúng một biến.</summary>
+    public string? Model { get; init; }
+
+    /// <summary>Tắt việc thử lại thẻ dính trần phút.</summary>
+    public bool NoRetry { get; init; }
+
     public bool Help { get; init; }
 
     public sealed record Parsed(EvalOptions? Options, string? Error);
@@ -35,13 +41,21 @@ public sealed record EvalOptions
                                   --out ..\PartnerCard\docs\EVAL.md chạy đúng khi đứng ở Code\
           --overwrite             Ghi đè cả file thay vì nối thêm một khối mới
           --extractor fake|gemini Đè cấu hình. Không truyền thì đọc appsettings
+          --model <id>            Đè PartnerCard:Model. Để so hai model trong EVAL.md mà chỉ
+                                  khác đúng một biến (vd: gemini-3.5-flash-lite)
           --cards a,b,c           Chỉ chạy các mã thẻ này (vd: en-01,ja-03)
-          --delay <giây>          Nghỉ giữa các lượt gọi. Mặc định 3 ở gemini, 0 ở fake
+          --delay <giây>          Nghỉ giữa các lượt gọi. Mặc định 0 ở fake; ở gemini thì suy
+                                  từ trần phút của model: 3.8 Flash 13s · 3.5 Flash Lite 5s
+          --no-retry              Không thử lại thẻ dính trần phút (mặc định: chờ 60s, thử lại
+                                  đúng một lần). Trần NGÀY thì không bao giờ thử lại
           --dir <path>            Đè thư mục ảnh. Mặc định TestData/realcards
           --help
 
         Cổng bắt buộc: chạy --extractor fake phải ra 72/72 (100%) trước mọi lời gọi thật.
         FakeExtractor đọc chính expected.json, nên con số nào khác 100% là lỗi của bộ đo.
+
+        Hạn mức quan sát ngày 11/09: 3.8 Flash 5 RPM / 20 RPD · 3.5 Flash Lite 15 RPM / 500 RPD.
+        Một lượt trọn bộ tốn 19 request, tức VƯỢT trần ngày của 3.8 Flash.
         """;
 
     public static Parsed Parse(string[] args)
@@ -60,6 +74,10 @@ public sealed record EvalOptions
                 case "--overwrite":
                     options = options with { Overwrite = true };
                     continue;
+
+                case "--no-retry":
+                    options = options with { NoRetry = true };
+                    continue;
             }
 
             if (i + 1 >= args.Length)
@@ -77,6 +95,10 @@ public sealed record EvalOptions
 
                 case "--dir":
                     options = options with { Dir = value };
+                    break;
+
+                case "--model":
+                    options = options with { Model = value };
                     break;
 
                 case "--extractor":

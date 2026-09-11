@@ -61,6 +61,47 @@ public sealed class EvalRunnerTests
         runs.Single(run => run.Skipped).ErrorCode.Should().Be("skipped_auth");
     }
 
+    [Fact] // B-17
+    public async Task Tran_phut_thi_cho_roi_goi_lai_chu_khong_dung_ca_luot_do()
+    {
+        // Trần PHÚT hết sau chưa tới một phút. Coi nó là trần ngày thì lượt đo dừng ở tấm thứ sáu
+        // trong khi chỉ cần chờ — mất cả bảng số vì một thứ tự nó khỏi.
+        var extractor = new ScriptedExtractor { FailOnceWith = { ["ja-05"] = new ExtractorRateLimitException() } };
+        var runs = await Run(extractor, "en-01.jpg", "ja-05.jpg", "ja-06.jpg");
+
+        runs.Should().HaveCount(3);
+        runs.Should().OnlyContain(run => run.Called, "cả ba tấm cuối cùng đều phải có kết quả");
+        runs.Single(run => run.CardCode == "ja-05").Retried.Should().BeTrue();
+        extractor.Calls.Should().Be(4, "ja-05 tốn hai lời gọi: lần dính trần và lần sau khi chờ");
+    }
+
+    [Fact] // B-17b
+    public async Task No_retry_thi_the_dinh_tran_phut_duoc_ghi_nhan_chu_khong_goi_lai()
+    {
+        var extractor = new ScriptedExtractor { FailOnceWith = { ["ja-05"] = new ExtractorRateLimitException() } };
+
+        var runs = await new EvalRunner(extractor, Answers, TimeSpan.Zero).RunAsync(
+            [Path.Combine(CardsDirectory, "ja-05.jpg")], TimeSpan.Zero, null, CancellationToken.None,
+            retry: false);
+
+        extractor.Calls.Should().Be(1);
+        runs.Single().ErrorCode.Should().Be("rate_limited");
+        runs.Single().Retried.Should().BeFalse();
+    }
+
+    [Fact] // B-18
+    public async Task Thong_diep_loi_that_cua_API_di_vao_ket_qua()
+    {
+        // Mã lỗi một mình không nói vấp vào trần nào, model nào, còn bao nhiêu.
+        var inner = new InvalidOperationException("Gemini trả mã 429. error.message=quota PerDay exceeded");
+        var extractor = new ScriptedExtractor { FailWith = { ["ja-05"] = new ExtractorQuotaException(inner) } };
+
+        var runs = await Run(extractor, "ja-05.jpg");
+
+        runs.Single().ErrorDetail.Should().Contain("PerDay exceeded");
+        runs.Single().ErrorDetail.Should().NotBe(runs.Single().ErrorCode);
+    }
+
     [Fact] // B-07
     public async Task Chay_duoc_mot_tap_con_de_thu_bo_do_bang_ba_request()
     {
@@ -103,7 +144,7 @@ public sealed class EvalRunnerTests
     {
         var paths = fileNames.Select(name => Path.Combine(CardsDirectory, name)).ToList();
 
-        return await new EvalRunner(extractor, Answers)
+        return await new EvalRunner(extractor, Answers, TimeSpan.Zero)
             .RunAsync(paths, TimeSpan.Zero, progress: null, CancellationToken.None);
     }
 
@@ -114,6 +155,9 @@ public sealed class EvalRunnerTests
     private sealed class ScriptedExtractor : IExtractor
     {
         public Dictionary<string, Exception> FailWith { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Ném đúng một lần rồi thôi — để kiểm việc chờ xong gọi lại thì ăn.</summary>
+        public Dictionary<string, Exception> FailOnceWith { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public string? RawJson { get; init; }
 
@@ -130,6 +174,11 @@ public sealed class EvalRunnerTests
             if (FailWith.TryGetValue(code, out var failure))
             {
                 throw failure;
+            }
+
+            if (FailOnceWith.Remove(code, out var once))
+            {
+                throw once;
             }
 
             var json = RawJson ?? CardJson.Serialize(CardExtractionResult.NotACard("ca kiểm thử"));

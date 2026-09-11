@@ -91,7 +91,7 @@ public sealed class CoreScoreTests
 
     private static string Build(IReadOnlyList<CardRun> runs) =>
         MarkdownReport.Build(
-            new ReportContext("fake", "-", "", "-", "realcards", true, false, TimeSpan.Zero, DateTimeOffset.UnixEpoch),
+            new ReportContext("fake", "-", "", "-", "realcards", true, false, TimeSpan.Zero, "ca kiểm thử", false, DateTimeOffset.UnixEpoch),
             runs);
 
     private static CardRun Scored(string code, int matched) =>

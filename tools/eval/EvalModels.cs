@@ -66,6 +66,20 @@ public sealed record CardRun(
     /// <summary>Với <see cref="CardRole.AntiFabrication"/> và <see cref="CardRole.Negative"/>.</summary>
     public bool? SpecialPass { get; init; }
 
+    /// <summary>
+    /// Lý do thật của lời gọi hỏng — <c>error.status</c> và <c>error.message</c> của API, lấy từ
+    /// <c>InnerException</c> (SPEC mục 4.1).
+    ///
+    /// <c>Exception.Message</c> của kiểu ngoài cùng là chuỗi trung tính viết cho người dùng cuối
+    /// ("Đã hết hạn mức gọi mô hình hôm nay"), nên nó **không nói được lượt đo vấp vào trần nào
+    /// hay model nào**. Đây là siêu dữ liệu của API chứ không phải nội dung danh thiếp, nên ghi
+    /// vào <c>EVAL.md</c> là an toàn — và không có nó thì gỡ rối một lượt đo hỏng phải đoán.
+    /// </summary>
+    public string? ErrorDetail { get; init; }
+
+    /// <summary>Đã chờ hết trần phút rồi gọi lại tấm này.</summary>
+    public bool Retried { get; init; }
+
     public FieldMatch? Field(string name) =>
         Fields.FirstOrDefault(f => f.Field == name);
 }

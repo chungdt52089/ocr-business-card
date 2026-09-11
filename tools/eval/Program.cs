@@ -55,6 +55,13 @@ try
         options.Extractor = cli.Extractor;
     }
 
+    // Đè model để so hai model trong cùng một EVAL.md mà chỉ khác đúng một biến. Khối kết quả
+    // vốn đã in model ở dòng đầu, nên phần ghi nhận không phải thêm gì.
+    if (cli.Model is not null)
+    {
+        options.Model = cli.Model;
+    }
+
     // Cùng phép kiểm khoá mà server dùng lúc khởi động, nên thiếu khoá thì hỏng ở đây chứ không
     // hỏng ở lời gọi thứ nhất sau khi đã đọc xong 19 file ảnh.
     secrets = SecretLoader.Load(configuration, options);
@@ -107,9 +114,13 @@ if (cli.Cards.Count > 0)
         .ToList();
 }
 
-// Hạn mức có trục RPM nên chế độ gemini nghỉ 3 giây giữa các lượt. Chế độ fake không có gì để tôn
-// trọng, và 19 × 3 giây là gần một phút chờ vô ích trong mỗi lượt kiểm offline.
-var delay = cli.Delay ?? (isFake ? TimeSpan.Zero : TimeSpan.FromSeconds(3));
+// Nhịp nghỉ suy từ trần PHÚT của chính model đang đo (RateLimits) — 5 RPM và 15 RPM cần hai nhịp
+// khác hẳn nhau. Chế độ fake không có hạn mức nào để tôn trọng, và 19 lần chờ là gần một phút vô
+// ích trong mỗi lượt kiểm offline.
+var delay = cli.Delay ?? (isFake ? TimeSpan.Zero : RateLimits.DelayFor(options.Model));
+var delayBasis = cli.Delay is not null ? "do --delay đặt"
+    : isFake ? "chế độ fake, không có hạn mức để tôn trọng"
+    : RateLimits.Explain(options.Model);
 
 var answers = ExpectedCards.LoadFrom(RepoPaths.ExpectedJson);
 var runner = new EvalRunner(extractor, answers);
@@ -133,7 +144,7 @@ IReadOnlyList<CardRun> runs;
 
 try
 {
-    runs = await runner.RunAsync(images, delay, progress, cancellation.Token);
+    runs = await runner.RunAsync(images, delay, progress, cancellation.Token, retry: !cli.NoRetry);
 }
 catch (OperationCanceledException)
 {
@@ -152,6 +163,8 @@ var context = new ReportContext(
     IsFake: isFake,
     IsRenderedFallback: renderedFallback,
     Delay: delay,
+    DelayBasis: delayBasis,
+    RetryEnabled: !cli.NoRetry && !isFake,
     At: DateTimeOffset.Now);
 
 var outPath = cli.OutPath is null
