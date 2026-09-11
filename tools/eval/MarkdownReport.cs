@@ -7,6 +7,7 @@ namespace PartnerCard.Eval;
 public sealed record ReportContext(
     string Model,
     string PromptVersion,
+    string PromptVersionNote,
     string ThinkingLevel,
     string ImageDirectory,
     bool IsFake,
@@ -97,7 +98,9 @@ public static class MarkdownReport
     {
         report.AppendLine("```");
         report.AppendLine(CultureInfo.InvariantCulture, $"model         : {context.Model}");
-        report.AppendLine(CultureInfo.InvariantCulture, $"promptVersion : {context.PromptVersion}");
+        report.AppendLine(context.PromptVersionNote.Length == 0
+            ? $"promptVersion : {context.PromptVersion}"
+            : $"promptVersion : {context.PromptVersion} — {context.PromptVersionNote}");
         report.AppendLine(CultureInfo.InvariantCulture, $"thinkingLevel : {context.ThinkingLevel}");
         report.AppendLine(CultureInfo.InvariantCulture, $"ảnh           : {context.ImageDirectory}");
         report.AppendLine(CultureInfo.InvariantCulture, $"nghỉ giữa lượt: {Num((int)context.Delay.TotalSeconds)}s");
@@ -108,6 +111,20 @@ public static class MarkdownReport
             "`thinkingLevel` nằm trong `generationConfig` chứ không trong prompt, nên `promptVersion`");
         report.AppendLine("không ghi lại được nó — vì vậy nó có một dòng riêng ở đây (SPEC mục 14).");
         report.AppendLine();
+
+        if (context.PromptVersionNote.Length > 0)
+        {
+            report.AppendLine(
+                "Ghi chú cạnh `promptVersion` phân biệt **hai loại thay đổi prompt**, và đó là mục đích duy");
+            report.AppendLine(
+                "nhất của nó. *Vá lỗ đặc tả* là prompt trước thiếu hẳn một luật nên mô hình làm đúng thứ nó");
+            report.AppendLine(
+                "được bảo; điểm lên là vì cái lỗ được vá. *Vòng tinh chỉnh* của T-09 mới là thử một cách diễn");
+            report.AppendLine(
+                "đạt khác để xem điểm có lên không. Trộn hai loại vào một bảng số thì T-09 sẽ tưởng mình vừa");
+            report.AppendLine("tìm ra một cách diễn đạt hiệu quả, rồi đi tối ưu tiếp theo hướng đó.");
+            report.AppendLine();
+        }
     }
 
     /// <summary>
@@ -177,12 +194,15 @@ public static class MarkdownReport
 
     private static void AppendCoreScore(StringBuilder report, IReadOnlyList<CardRun> runs)
     {
-        report.AppendLine("### Bốn trường bắt buộc — 72 điểm");
+        var score = CoreScore.From(runs);
+
+        // Tiêu đề nêu đúng cỡ mẫu của LƯỢT NÀY. Viết cứng "72 điểm" thì một lượt --cards hai thẻ
+        // vẫn khoe con số của trọn bộ ngay phía trên một bảng chỉ có 8 điểm.
+        report.AppendLine(
+            $"### Bốn trường bắt buộc — {Num(score.Cards)} thẻ tính điểm × 4 = {Num(score.Total)} điểm");
         report.AppendLine();
 
         AppendScoreTable(report, runs, CardScorer.CoreFields, withTotal: true);
-
-        var score = CoreScore.From(runs);
 
         // Dòng phụ chỉ có mặt khi thật sự có thẻ không gọi được. Lượt đo trọn vẹn thì hai mẫu số
         // bằng nhau, in cả hai chỉ là nhiễu.

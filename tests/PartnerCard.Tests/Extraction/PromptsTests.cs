@@ -32,6 +32,10 @@ public sealed class PromptsTests
     [InlineData("isBusinessCard = false")]
     // searchAlias — ranh giới quan trọng nhất của nó.
     [InlineData("KHÔNG DỊCH CHỨC DANH")]
+    // Thẻ song ngữ — luật thêm ở v1.2. Thiếu nó thì mô hình ghép hai hệ chữ vào một trường,
+    // và đó là lỗ đặc tả chứ không phải lỗi đọc (SPEC mục 4.5).
+    [InlineData("CHỌN MỘT, KHÔNG GHÉP")]
+    [InlineData("Chỉ tự phiên âm khi thẻ KHÔNG in sẵn bản Latin")]
     // fieldConfidence — schema ép trả tám số, prompt phải nói chấm chúng thế nào.
     [InlineData("ĐỪNG ĐẶT 1.0 CHO MỌI TRƯỜNG THEO PHẢN XẠ")]
     [InlineData("0.5–0.8")]

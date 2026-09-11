@@ -145,6 +145,7 @@ catch (OperationCanceledException)
 var context = new ReportContext(
     Model: isFake ? "fake (FakeExtractor — đọc expected.json)" : options.Model,
     PromptVersion: isFake ? "-" : Prompts.Version,
+    PromptVersionNote: isFake ? "" : Prompts.VersionNote,
     // Đọc thẳng hằng, không chép lại chuỗi (SPEC mục 14).
     ThinkingLevel: isFake ? "-" : GeminiExtractor.ThinkingLevel,
     ImageDirectory: Display(directory) + (renderedFallback ? " (bản render!)" : " (ảnh chụp thật)"),

@@ -97,7 +97,9 @@ public sealed class FakeExtractorTests
 
         card.DetectedLanguage.Should().Be("mixed");
         card.FullName.Should().Be("中川 寛");
-        card.SearchAlias.Should().Be("Hiroshi Nakagawa Sakuragawa Trading K.K. Tokyo Chuo Ginza");
+        // Dừng ở cấp quận (中央区 → Chuo), không xuống phường: 銀座 cùng cấp với 岩本町 mà ja-01
+        // đã bỏ. Sửa 11/09 cho khớp cả tám thẻ ja-* (SPEC mục 4.5).
+        card.SearchAlias.Should().Be("Hiroshi Nakagawa Sakuragawa Trading K.K. Tokyo Chuo");
     }
 
     // ---- X-07 · không bịa email ----------------------------------------------------
