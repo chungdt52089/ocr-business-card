@@ -70,6 +70,36 @@ public sealed class CoreScoreTests
             .Should().Contain(Marker).And.Contain("← con số nghiệm thu");
     }
 
+    [Fact] // B-19
+    public void Ghi_chu_gioi_han_anh_chi_hien_khi_truong_do_that_su_sai()
+    {
+        const string Marker = "Giới hạn của ảnh, không phải của prompt";
+
+        // ja-05 đọc đúng address → không có gì để bào chữa, ghi chú phải im.
+        Build([Scored("ja-05", matched: 9)]).Should().NotContain(Marker);
+
+        // ja-05 sai address → ghi chú hiện, kèm lý do truy được về tấm ảnh.
+        var block = Build([Scored("ja-05", matched: 9) with
+        {
+            Fields = [new FieldMatch("address", false, false, "kỳ vọng", "nhận được")],
+        }]);
+
+        block.Should().Contain(Marker).And.Contain("tương phản thấp");
+    }
+
+    [Fact] // B-19b
+    public void The_khac_sai_cung_truong_thi_khong_muon_ghi_chu_cua_ja_05()
+    {
+        // Ghi chú gắn với (mã thẻ, trường), không gắn với riêng trường — kẻo nó thành lời bào
+        // chữa dùng chung cho mọi lỗi address.
+        var block = Build([Scored("ja-02", matched: 9) with
+        {
+            Fields = [new FieldMatch("address", false, false, "kỳ vọng", "nhận được")],
+        }]);
+
+        block.Should().NotContain("Giới hạn của ảnh");
+    }
+
     [Fact] // B-16
     public void Dong_dem_mang_ca_hai_nhan_vi_file_va_the_tinh_diem_la_hai_tap_khac_nhau()
     {

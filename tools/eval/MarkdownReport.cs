@@ -354,7 +354,34 @@ public static class MarkdownReport
         }
 
         report.AppendLine();
+        AppendKnownImageLimits(report, runs);
         AppendErrorDetails(report, broken);
+    }
+
+    /// <summary>
+    /// Tách những chỗ sai **không sửa được bằng prompt** ra khỏi những chỗ sửa được.
+    ///
+    /// Trong một bảng lỗi, mọi dòng trông giống nhau. Không nói ra thì người đọc tiếp theo sẽ đem
+    /// T-09 đi chỉnh luật đọc địa chỉ cho một tấm mà nguyên nhân nằm ở độ tương phản của tờ giấy.
+    /// </summary>
+    private static void AppendKnownImageLimits(StringBuilder report, IReadOnlyList<CardRun> runs)
+    {
+        var hits = KnownImageLimits.Hit(runs);
+
+        if (hits.Count == 0)
+        {
+            return;
+        }
+
+        report.AppendLine("**Giới hạn của ảnh, không phải của prompt — đừng chỉnh prompt cho mấy chỗ này:**");
+        report.AppendLine();
+
+        foreach (var (card, field, note) in hits)
+        {
+            report.AppendLine($"- `{card}` · `{field}` — {note}");
+        }
+
+        report.AppendLine();
     }
 
     /// <summary>
