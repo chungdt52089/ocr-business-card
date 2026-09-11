@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/PartnerCard.Web/PartnerCard.Web.csproj" />
+    <ProjectReference Include="../../tools/eval/PartnerCard.Eval.csproj" />
   </ItemGroup>
 
   <ItemGroup>

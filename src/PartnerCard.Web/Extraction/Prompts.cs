@@ -22,8 +22,31 @@ public static class Prompts
     /// <c>v1.1</c> — thêm phần định nghĩa <c>fieldConfidence</c>. Không có nó thì mô hình gần
     /// như chắc chắn trả 1.0 cho mọi trường, <c>min(mô hình, định dạng)</c> luôn ≥ 0,9, và màn
     /// hình xác nhận không bao giờ tô vàng chỗ nào — mất lưới cảnh báo mà mất im lặng.
+    ///
+    /// <c>v1.2</c> — thêm luật thẻ song ngữ. **Đây là vá lỗ đặc tả, không phải vòng tinh chỉnh**
+    /// (xem <see cref="VersionNote"/>).
+    ///
+    /// <c>v1.3</c> — địa danh ba cấp trong <c>searchAlias</c>. Cũng là vá lỗ đặc tả: luật cũ viết
+    /// "tỉnh/thành và quận", đúng với địa chỉ **hai** cấp (<c>東京都渋谷区</c>) nhưng không nói gì
+    /// về địa chỉ **ba** cấp (<c>兵庫県神戸市中央区</c>), nên mô hình lấy hai cấp đầu rồi dừng và
+    /// đánh rơi tên quận. Hai lượt đo độc lập cùng sai đúng một kiểu ở đúng một tấm — dấu hiệu của
+    /// một luật thiếu, không phải của một lần đọc trượt.
     /// </summary>
-    public const string Version = "v1.1";
+    public const string Version = "v1.3";
+
+    /// <summary>
+    /// Vì sao phiên bản này khác phiên bản trước — in cạnh <c>promptVersion</c> trong
+    /// <c>EVAL.md</c> (SPEC mục 14).
+    ///
+    /// **Phân biệt hai loại thay đổi prompt, và đó là mục đích duy nhất của chuỗi này.** T-09 là
+    /// vòng *tinh chỉnh*: thử một cách diễn đạt khác để xem điểm có lên không. Còn v1.1 → v1.2 là
+    /// *vá lỗ đặc tả*: prompt trước **không hề nói** thẻ in hai hệ chữ thì lấy bản nào, nên mô
+    /// hình ghép cả hai — nó làm đúng thứ nó được bảo. Điểm `bi-01` và `bi-02` tăng lên là vì cái
+    /// lỗ được vá, không phải vì mô hình đọc tốt hơn. Trộn hai loại vào một bảng số thì T-09 sẽ
+    /// tưởng mình vừa tìm ra một cách diễn đạt hiệu quả, và đi tối ưu tiếp theo hướng đó.
+    /// </summary>
+    public const string VersionNote =
+        "vá lỗ đặc tả (địa danh ba cấp trong searchAlias), KHÔNG phải vòng tinh chỉnh của T-09";
 
     /// <summary>
     /// Sáu điều theo đúng thứ tự ưu tiên của SPEC mục 4.5, cộng hai ví dụ. Hai ví dụ dùng nhân
@@ -55,12 +78,30 @@ public static class Prompts
            và ĐỂ TRỐNG TOÀN BỘ các trường còn lại. Đã nói không đọc được thì không được
            đồng thời đưa ra dữ liệu.
 
+        THẺ IN CẢ HAI HỆ CHỮ — CHỌN MỘT, KHÔNG GHÉP
+           Nhiều thẻ Nhật in cùng một thông tin hai lần: một bản chữ Nhật, một bản Latin.
+           - fullName, company, jobTitle: lấy BẢN CHỮ NHẬT, bỏ bản Latin.
+             Thẻ in "森下 涼子 / Ryoko Morishita" → fullName = "森下 涼子"
+             KHÔNG ghép thành "森下 涼子 Ryoko Morishita".
+           - Bản Latin in trên thẻ đi vào searchAlias, CHÉP ĐÚNG NHƯ IN:
+             "Ryoko Morishita", "Minatoya Instruments K.K."
+             Không đảo thứ tự tên, không tự phiên âm lại thành "Morishita Ryoko"
+             hay "Minatoya Keiki".
+           - Chỉ tự phiên âm khi thẻ KHÔNG in sẵn bản Latin.
+
         searchAlias — CHỈ dùng cho thẻ có chữ Nhật
-           Ghi phiên âm Latin của TÊN NGƯỜI, TÊN CÔNG TY, và TỈNH/THÀNH + QUẬN
+           Ghi phiên âm Latin của TÊN NGƯỜI, TÊN CÔNG TY, và ĐỊA DANH HÀNH CHÍNH
            vào MỘT chuỗi duy nhất, cách nhau bằng khoảng trắng.
            - KHÔNG DỊCH CHỨC DANH. 営業部長 không được thành "Sales Manager".
              Chức danh đã có trường jobTitle riêng, tìm thẳng trên đó.
-           - Địa chỉ chỉ lấy tỉnh/thành và quận. Bỏ số nhà, tên toà nhà, mã bưu chính.
+           - ĐỊA DANH: lấy ĐỦ MỌI CẤP HÀNH CHÍNH từ tỉnh/thành xuống TỚI QUẬN.
+             Địa chỉ Nhật có khi hai cấp, có khi ba. Có ba thì lấy CẢ BA —
+             đừng dừng lại ở cấp thứ hai.
+                東京都渋谷区神南1-2-3       → "Tokyo Shibuya"
+                                             (2 cấp: 都 + 区)
+                静岡県浜松市中区板屋町4-5-6 → "Shizuoka Hamamatsu Naka"
+                                             (3 cấp: 県 + 市 + 区 — thiếu "Naka" là SAI)
+             Bỏ từ cấp phường (町, 丁目) trở xuống, cùng số nhà, tên toà nhà, mã bưu chính.
            - Thẻ không có chữ Nhật thì để chuỗi rỗng.
 
         fieldConfidence — CHẤM ĐIỂM TIN CẬY CHO TÁM TRƯỜNG
@@ -101,7 +142,7 @@ public static class Prompts
 
         Trên thẻ:
            有限会社葛西電装 — 技術部 主任 — 小林 誠
-           〒103-0027 東京都中央区日本橋2-4-9   (dòng này in chữ nhỏ, hơi mờ)
+           〒111-0051 東京都台東区蔵前3-8-1   (dòng này in chữ nhỏ, hơi mờ)
            03-5550-7741 — m.kobayashi@kasai-densou.example
 
         Trả về:
@@ -109,15 +150,15 @@ public static class Prompts
               (cả ba giữ nguyên chữ Nhật)
            phones ["03-5550-7741"]   (không thêm +81)
            emails ["m.kobayashi@kasai-densou.example"] · website ""
-           address "〒103-0027 東京都中央区日本橋2-4-9"
+           address "〒111-0051 東京都台東区蔵前3-8-1"
            detectedLanguage "ja"
-           searchAlias "Kobayashi Makoto Kasai Densou Tokyo Chuo"
-              (tên người + tên công ty + tỉnh/thành và quận.
+           searchAlias "Kobayashi Makoto Kasai Densou Tokyo Taito"
+              (tên người + tên công ty + địa danh. Địa chỉ này có 2 cấp: 都 + 区.
                KHÔNG có "Engineering Supervisor" — chức danh không được dịch.
-               KHÔNG có "Nihonbashi 2-4-9" — số nhà không thuộc searchAlias.)
+               KHÔNG có "Kuramae 3-8-1" — cấp phường và số nhà không thuộc searchAlias.)
            fieldConfidence: fullName 1.0 · jobTitle 1.0 · company 1.0 · phones 1.0 ·
                             emails 1.0 · website 0 · address 0.7 · searchAlias 1.0
-                            (address 0.7 vì dòng 〒103-0027 in nhỏ và mờ — đọc được nhưng
+                            (address 0.7 vì dòng 〒111-0051 in nhỏ và mờ — đọc được nhưng
                              phải căng mắt. website 0 vì thẻ không in website.)
         """;
 }

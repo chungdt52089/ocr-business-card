@@ -68,8 +68,15 @@ public sealed class GeminiExtractorTests
             {
                 Extractor = ExtractorNames.Gemini,
                 ExtractTimeoutSeconds = timeoutSeconds,
+
+                // Đặt tường minh chứ không dựa vào giá trị mặc định: nhóm ca này kiểm đường dây
+                // "model trong cấu hình đi vào Usage", không kiểm dự án đang ship model nào. Dựa
+                // vào mặc định thì đổi model mặc định là ca đỏ trong khi chẳng có gì hỏng.
+                Model = TestModel,
             }),
             retryDelay ?? TimeSpan.Zero);
+
+    private const string TestModel = "gemini-3.8-flash";
 
     private static Task<RawExtraction> ExtractRaw(GeminiExtractor extractor, CancellationToken ct = default) =>
         extractor.ExtractRawAsync(new byte[] { 1, 2, 3 }, "image/jpeg", null, "ja-01.jpg", ct);
@@ -268,7 +275,7 @@ public sealed class GeminiExtractorTests
 
         raw.Usage.TokensIn.Should().Be(1102);
         raw.Usage.TokensOut.Should().Be(168);
-        raw.Usage.Model.Should().Be("gemini-3.8-flash");
+        raw.Usage.Model.Should().Be(TestModel);
         raw.Usage.PromptVersion.Should().Be(Prompts.Version);
         raw.Usage.LatencyMs.Should().BeGreaterThanOrEqualTo(0);
     }

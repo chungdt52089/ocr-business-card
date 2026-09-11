@@ -32,7 +32,8 @@ try
     builder.Services.AddSingleton<IPartnerStore>(
         JsonPartnerStore.LoadFrom(dataDirectory, TimeProvider.System));
 
-    builder.Services.AddSingleton<IExtractor>(SelectExtractor(options, secrets));
+    builder.Services.AddSingleton(ExtractorFactory.Create(
+        options, secrets, ExtractorFactory.DefaultExpectedJsonPath));
 }
 catch (InvalidOperationException ex)
 {
@@ -70,29 +71,6 @@ app.MapRazorComponents<App>()
 app.Run();
 
 return 0;
-
-// Chọn bản cài IExtractor theo cấu hình (SPEC mục 4.1). SecretLoader đã loại giá trị lạ,
-// nên tới đây chỉ còn hai nhánh hợp lệ.
-static IExtractor SelectExtractor(PartnerCardOptions options, SecretOptions secrets)
-{
-    if (options.RequiresApiKey)
-    {
-        // Một HttpClient dùng lại cho cả vòng đời tiến trình: chỉ có một endpoint, và tạo mới
-        // mỗi lời gọi là bỏ phí bắt tay TLS rồi đọng socket ở TIME_WAIT.
-        //
-        // Timeout để vô hạn ở đây là cố ý: nguồn hạn giờ duy nhất là CancellationTokenSource
-        // trong GeminiExtractor, vì chỉ nó phân biệt được timeout của mình với việc người dùng
-        // huỷ — HttpClient.Timeout thì không (SPEC mục 4.1).
-        var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-
-        return new GeminiExtractor(http, secrets, Microsoft.Extensions.Options.Options.Create(options));
-    }
-
-    // Bảng đáp án được csproj chép sang output, nên tìm theo thư mục chứa binary
-    // chứ không theo working directory.
-    return new FakeExtractor(ExpectedCards.LoadFrom(
-        Path.Combine(AppContext.BaseDirectory, "fakedata", "expected.json")));
-}
 
 // Để test dựng được host mà không phải mở public thứ gì khác.
 public partial class Program;

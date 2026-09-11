@@ -32,6 +32,14 @@ public sealed class PromptsTests
     [InlineData("isBusinessCard = false")]
     // searchAlias — ranh giới quan trọng nhất của nó.
     [InlineData("KHÔNG DỊCH CHỨC DANH")]
+    // Thẻ song ngữ — luật thêm ở v1.2. Thiếu nó thì mô hình ghép hai hệ chữ vào một trường,
+    // và đó là lỗ đặc tả chứ không phải lỗi đọc (SPEC mục 4.5).
+    [InlineData("CHỌN MỘT, KHÔNG GHÉP")]
+    [InlineData("Chỉ tự phiên âm khi thẻ KHÔNG in sẵn bản Latin")]
+    // Địa danh ba cấp — luật thêm ở v1.3. Luật cũ nói "tỉnh/thành và quận", đúng với địa chỉ hai
+    // cấp nhưng im lặng về địa chỉ ba cấp, nên mô hình dừng ở cấp thứ hai (SPEC mục 4.5).
+    [InlineData("lấy ĐỦ MỌI CẤP HÀNH CHÍNH")]
+    [InlineData("đừng dừng lại ở cấp thứ hai")]
     // fieldConfidence — schema ép trả tám số, prompt phải nói chấm chúng thế nào.
     [InlineData("ĐỪNG ĐẶT 1.0 CHO MỌI TRƯỜNG THEO PHẢN XẠ")]
     [InlineData("0.5–0.8")]
@@ -48,7 +56,12 @@ public sealed class PromptsTests
         // như đúng" mà cả dự án được dựng để chặn.
         var expected = JsonNode.Parse(File.ReadAllText(ExpectedJsonPath))!.AsObject();
 
-        string[] fields = ["fullName", "company", "website"];
+        // Chỉ trường kiểu chuỗi: phones và emails là mảng, GetValue<string>() sẽ ném.
+        //
+        // address, cityLatin và searchAlias thêm ngày 11/09. Ba trường này không nằm trong 4 trường
+        // tính điểm, nên bản trước bỏ qua chúng — nhưng `searchAlias` chính là trường `v1.3` sinh
+        // ra để sửa, và một ví dụ chạm vào đáp án của nó thì `v1.3` đang tự chấm bài của mình.
+        string[] fields = ["fullName", "company", "website", "address", "cityLatin", "searchAlias"];
 
         var answers = expected
             .SelectMany(card => fields.Select(field => card.Value![field]?.GetValue<string>()))
@@ -57,7 +70,14 @@ public sealed class PromptsTests
             .ToList();
 
         answers.Should().NotBeEmpty("phải có đáp án để đối chiếu thì ca này mới có nghĩa");
-        answers.Should().OnlyContain(answer => !Prompts.ExtractCard.Contains(answer!));
+
+        // Lọc ra TRƯỚC rồi mới khẳng định, chứ không dùng OnlyContain: OnlyContain đỏ thì in cả
+        // chuỗi prompt ra màn hình mà không nói giá trị nào trùng, và người đọc phải tự dò tay.
+        var leaked = answers.Where(answer => Prompts.ExtractCard.Contains(answer!)).ToList();
+
+        leaked.Should().BeEmpty(
+            "prompt không được chứa đáp án nào của bộ mẫu — nhét một tấm thẻ của bộ đo vào prompt "
+            + "là dạy mô hình đáp án rồi tự đo lại chính mình");
     }
 
     [Fact]

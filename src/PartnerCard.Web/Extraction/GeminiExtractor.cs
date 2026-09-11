@@ -193,9 +193,11 @@ public sealed class GeminiExtractor(
     {
         if (status == HttpStatusCode.TooManyRequests)
         {
-            // Không bao giờ thử lại. Hết hạn mức là chuyện của cả ngày, không phải của giây này —
-            // thử lại chỉ tiêu thêm quota mà kết quả vẫn thế.
-            throw new ExtractorQuotaException(Detail(status, body));
+            // Trần phút và trần ngày về cùng một mã HTTP nhưng đối lập nhau về vòng đời, nên phải
+            // tách ra ở đây — chỗ duy nhất còn nhìn thấy thân phản hồi (SPEC mục 4.6).
+            throw IsPerMinuteQuota(body)
+                ? new ExtractorRateLimitException(Detail(status, body))
+                : new ExtractorQuotaException(Detail(status, body));
         }
 
         if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
@@ -226,6 +228,24 @@ public sealed class GeminiExtractor(
     /// </summary>
     private static InvalidOperationException Detail(HttpStatusCode status, string body) =>
         new($"Gemini trả mã {(int)status} ({status}). {ApiError(body)}");
+
+    /// <summary>
+    /// Thân của một <c>429</c> nói đây là trần **phút** hay trần **ngày**.
+    ///
+    /// Google gắn <c>QuotaFailure</c> vào <c>error.details</c>, và <c>quotaId</c> trong đó mang
+    /// hẳn chữ <c>PerMinute</c> hoặc <c>PerDay</c> (<c>GenerateRequestsPerMinutePerProjectPerModel</c>).
+    /// Ta dò chuỗi trên cả thân thay vì lần theo đúng đường dẫn JSON: hình dạng <c>details</c>
+    /// thay đổi theo thời gian, còn hai từ khoá đó thì không, và đoán sai ở đây chỉ làm lượt đo
+    /// dừng sớm chứ không làm hỏng dữ liệu.
+    ///
+    /// **Trần ngày thắng khi cả hai cùng xuất hiện, và "không rõ" cũng tính là trần ngày.** Dừng
+    /// nhầm thì chạy lại một lượt; đi tiếp nhầm thì tiêu nốt hạn mức để thu về một bảng số rác.
+    /// </summary>
+    private static bool IsPerMinuteQuota(string body) =>
+        !body.Contains("PerDay", StringComparison.OrdinalIgnoreCase)
+        && !body.Contains("per day", StringComparison.OrdinalIgnoreCase)
+        && (body.Contains("PerMinute", StringComparison.OrdinalIgnoreCase)
+            || body.Contains("per minute", StringComparison.OrdinalIgnoreCase));
 
     private static string ApiError(string body)
     {

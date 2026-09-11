@@ -24,13 +24,32 @@ public abstract class ExtractorException : Exception
 }
 
 /// <summary>
-/// <c>429 RESOURCE_EXHAUSTED</c> — hết hạn mức trong ngày.
+/// <c>429 RESOURCE_EXHAUSTED</c> vì **trần ngày (RPD)** đã cạn.
 ///
 /// **Không bao giờ thử lại tự động.** Thử lại chỉ tiêu thêm hạn mức mà kết quả vẫn thế, và trong
 /// buổi demo thì nó còn khiến người dùng chụp lại thêm vài lần nữa.
 /// </summary>
 public sealed class ExtractorQuotaException(Exception? inner = null)
     : ExtractorException("quota_exhausted", "Đã hết hạn mức gọi mô hình hôm nay.", inner);
+
+/// <summary>
+/// <c>429 RESOURCE_EXHAUSTED</c> vì **trần phút (RPM)**, không phải trần ngày.
+///
+/// **Hai thứ này cùng một mã HTTP nhưng đối lập nhau về vòng đời**, nên gộp chúng là hỏng cả hai
+/// đầu: trần phút hết sau chưa tới một phút, còn trần ngày kéo tới khi reset (SPEC mục 4.6).
+///
+/// | | Trần phút | Trần ngày |
+/// |---|---|---|
+/// | Chờ bao lâu thì hết | &lt; 60 giây | Tới nửa đêm giờ Thái Bình Dương |
+/// | Gọi tiếp có ích không | Có, sau khi chờ | Không, và tiêu thêm request |
+///
+/// Coi trần phút là trần ngày thì lượt đo dừng ngay ở tấm thứ sáu trong khi chỉ cần chờ. Coi trần
+/// ngày là trần phút thì ngồi chờ 18 lần vô ích. Vì vậy <c>GeminiExtractor</c> đọc
+/// <c>QuotaFailure</c> trong thân phản hồi để tách hai ca, và **không đọc được thì coi là trần
+/// ngày** — dừng nhầm thì chạy lại một lượt, còn đi tiếp nhầm thì cả bảng số thành rác.
+/// </summary>
+public sealed class ExtractorRateLimitException(Exception? inner = null)
+    : ExtractorException("rate_limited", "Đang gọi nhanh quá hạn mức cho phép. Thử lại sau ít giây.", inner);
 
 /// <summary>
 /// Mô hình không trả lời kịp <c>ExtractTimeoutSeconds</c>.
