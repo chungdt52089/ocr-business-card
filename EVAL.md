@@ -5,7 +5,7 @@ nối vào cuối file — để so được số trước và số sau mỗi l�
 
 Báo cáo bằng **số đếm thô kèm phần trăm**. 18 thẻ × 4 trường bắt buộc = 72 điểm dữ liệu.
 
-## Lượt đo · 2026-09-10 21:13 +07:00
+## Lượt đo · 2026-09-10 21:51 +07:00
 
 > ⚠ **Lượt này chạy ở chế độ `fake`, không dùng để nghiệm thu.** `FakeExtractor` đọc
 > chính `expected.json`, nên con số dưới đây chỉ chứng minh **bộ đo tự nó đúng** — bất cứ
@@ -22,11 +22,16 @@ nghỉ giữa lượt: 0s
 `thinkingLevel` nằm trong `generationConfig` chứ không trong prompt, nên `promptVersion`
 không ghi lại được nó — vì vậy nó có một dòng riêng ở đây (SPEC mục 14).
 
-**19/19 gọi được**
+**19/19 file gọi được · 18/18 thẻ tính điểm**
+
+**19 file ≠ 18 thẻ tính điểm.** Phần chênh là `ja-01-partial` (ca chống bịa).
+Phần chênh vẫn tiêu một request như mọi tấm khác, nhưng được chấm theo tiêu chí khác hẳn và
+**nằm ngoài 72 điểm** (TEST-SPEC mục 12) — xem mục riêng ở dưới. **Mọi mẫu số điểm số trong
+khối này đếm theo thẻ tính điểm, không theo file.**
 
 ### Bốn trường bắt buộc — 72 điểm
 
-| Nhóm | Thẻ | fullName | company | phones | emails | Tổng |
+| Nhóm | Thẻ tính điểm | fullName | company | phones | emails | Tổng |
 |---|---|---|---|---|---|---|
 | Anh | 8 | 8/8 | 8/8 | 8/8 | 8/8 | 32/32 (100,0%) |
 | Nhật + song ngữ | 10 | 10/10 | 10/10 | 10/10 | 10/10 | 40/40 (100,0%) |
@@ -34,7 +39,7 @@ không ghi lại được nó — vì vậy nó có một dòng riêng ở đây
 
 ### Trường phụ — báo cáo, không gate
 
-| Nhóm | Thẻ | jobTitle | website | address | detectedLanguage | searchAlias |
+| Nhóm | Thẻ tính điểm | jobTitle | website | address | detectedLanguage | searchAlias |
 |---|---|---|---|---|---|---|
 | Anh | 8 | 8/8 | 8/8 | 8/8 | 8/8 | 8/8 |
 | Nhật + song ngữ | 10 | 10/10 | 10/10 | 10/10 | 10/10 | 10/10 |
@@ -70,7 +75,7 @@ cho mọi trường có giá trị (SPEC mục 4.1), nên `min` bằng 1,0 ở �
 ### Độ trễ và token
 
 ```
-p50 0 ms · p95 17 ms
+p50 0 ms · p95 36 ms
 tokensIn 0 · tokensOut 0 · tổng 0
 ```
 

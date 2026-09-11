@@ -207,17 +207,23 @@ static string Line(int index, int total, CardRun run)
 
 static void Summarise(IReadOnlyList<CardRun> runs, string outPath, bool isFake)
 {
-    var core = runs.Where(run => run.Role == CardRole.Core).ToList();
-    var total = core.Count * CardScorer.CoreFields.Count;
-    var hit = core.Sum(run => run.Fields.Count(f => CardScorer.CoreFields.Contains(f.Field) && f.Matched));
-    var percent = total == 0 ? 0 : 100.0 * hit / total;
+    var score = CoreScore.From(runs);
 
     Console.WriteLine();
-    Console.WriteLine(
-        $"{hit}/{total} trường đúng ({percent.ToString("F1", CultureInfo.InvariantCulture).Replace('.', ',')}%)");
+    Console.WriteLine($"{score.Hit}/{score.Total} trường đúng ({Pct(score.Percent)}%) trên {score.Cards} thẻ tính điểm");
+
+    // Cùng lý do với dòng phụ trong EVAL.md, và ở đây còn cần hơn: console là chỗ đầu tiên nhìn
+    // thấy lượt đo hỏng, nên đừng để con số duy nhất hiện ra đổ oan cho mô hình.
+    if (score.BrokenCards > 0)
+    {
+        Console.WriteLine(
+            $"{score.Hit}/{score.CalledTotal} nếu chỉ tính {score.CalledCards}/{score.Cards} thẻ tính điểm "
+            + $"có kết quả ({Pct(score.CalledPercent)}%)");
+    }
+
     Console.WriteLine($"Đã ghi {outPath}");
 
-    if (isFake && hit != total)
+    if (isFake && score.Hit != score.Total)
     {
         Console.WriteLine();
         Console.WriteLine(
@@ -226,3 +232,6 @@ static void Summarise(IReadOnlyList<CardRun> runs, string outPath, bool isFake)
             "  là LỖI CỦA BỘ ĐO, không phải của mô hình. Sửa xong hãy gọi Gemini thật.");
     }
 }
+
+static string Pct(double value) =>
+    value.ToString("F1", CultureInfo.InvariantCulture).Replace('.', ',');

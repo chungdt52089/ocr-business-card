@@ -110,14 +110,25 @@ public static class MarkdownReport
         report.AppendLine();
     }
 
+    /// <summary>
+    /// **Hai đơn vị đếm khác nhau, nên cả hai phải mang nhãn.** Số file và số thẻ tính điểm không
+    /// bằng nhau: <c>realcards/</c> có 19 file nhưng chỉ 18 tấm cộng vào 72 điểm, vì
+    /// <c>ja-01-partial</c> tiêu một request như mọi tấm khác mà lại được chấm theo tiêu chí khác
+    /// hẳn (TEST-SPEC mục 12). Để trần hai con số cùng tên "gọi được" là mời người đọc so
+    /// <c>19/19</c> với một mẫu số 18 rồi tự hỏi tấm nào biến mất.
+    /// </summary>
     private static void AppendCallCounts(StringBuilder report, IReadOnlyList<CardRun> runs)
     {
         var called = runs.Count(run => run.Called);
         var failed = runs.Where(run => !run.Called && !run.Skipped).ToList();
         var skipped = runs.Where(run => run.Skipped).ToList();
 
+        var core = runs.Where(run => run.Role == CardRole.Core).ToList();
+        var calledCore = core.Count(run => run.Called);
+
         var line = new StringBuilder(
-            $"**{Num(called)}/{Num(runs.Count)} gọi được");
+            $"**{Num(called)}/{Num(runs.Count)} file gọi được · " +
+            $"{Num(calledCore)}/{Num(core.Count)} thẻ tính điểm");
 
         if (failed.Count > 0)
         {
@@ -134,6 +145,25 @@ public static class MarkdownReport
         line.Append("**");
         report.AppendLine(line.ToString());
         report.AppendLine();
+
+        var extras = runs.Where(run => run.Role != CardRole.Core).ToList();
+
+        if (extras.Count > 0)
+        {
+            report.AppendLine(
+                $"**{Num(runs.Count)} file ≠ {Num(core.Count)} thẻ tính điểm.** Phần chênh là "
+                + string.Join(", ", extras
+                    .GroupBy(run => run.Role)
+                    .Select(group =>
+                        string.Join(" · ", group.Select(run => $"`{run.CardCode}`")) + $" ({RoleName(group.Key)})"))
+                + ".");
+            report.AppendLine(
+                "Phần chênh vẫn tiêu một request như mọi tấm khác, nhưng được chấm theo tiêu chí khác hẳn và");
+            report.AppendLine(
+                "**nằm ngoài 72 điểm** (TEST-SPEC mục 12) — xem mục riêng ở dưới. **Mọi mẫu số điểm số trong");
+            report.AppendLine("khối này đếm theo thẻ tính điểm, không theo file.**");
+            report.AppendLine();
+        }
 
         if (skipped.Count > 0)
         {
@@ -152,15 +182,35 @@ public static class MarkdownReport
 
         AppendScoreTable(report, runs, CardScorer.CoreFields, withTotal: true);
 
-        var brokenCore = runs.Count(run => run.Role == CardRole.Core && !run.Called);
+        var score = CoreScore.From(runs);
 
-        if (brokenCore > 0)
+        // Dòng phụ chỉ có mặt khi thật sự có thẻ không gọi được. Lượt đo trọn vẹn thì hai mẫu số
+        // bằng nhau, in cả hai chỉ là nhiễu.
+        if (score.BrokenCards > 0)
         {
             report.AppendLine();
-            report.AppendLine(CultureInfo.InvariantCulture,
-                $"{Num(brokenCore)} thẻ không có kết quả được tính **0 điểm cho cả bốn trường**, và mẫu số giữ");
+            report.AppendLine("```");
             report.AppendLine(
-                "nguyên. Bỏ chúng ra khỏi mẫu số thì tỷ lệ đẹp lên đúng vì lượt đo hỏng nhiều hơn.");
+                $"tính cả thẻ hỏng   : {Num(score.Hit)}/{Num(score.Total)} ({Pct(score.Percent)}%)   "
+                + $"← con số nghiệm thu · mẫu số {Num(score.Cards)} thẻ tính điểm");
+            report.AppendLine(
+                $"chỉ thẻ có kết quả : {Num(score.Hit)}/{Num(score.CalledTotal)} ({Pct(score.CalledPercent)}%)   "
+                + $"← mẫu số {Num(score.CalledCards)}/{Num(score.Cards)} thẻ tính điểm có kết quả");
+            report.AppendLine("```");
+            report.AppendLine();
+
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"**Con số nghiệm thu là dòng trên**: {Num(score.BrokenCards)} thẻ không có kết quả được tính");
+            report.AppendLine(
+                "**0 điểm cho cả bốn trường** và mẫu số giữ nguyên. Bỏ chúng ra khỏi mẫu số thì tỷ lệ đẹp lên");
+            report.AppendLine("đúng vì lượt đo hỏng nhiều hơn — con số tự thưởng cho chính thất bại của nó.");
+            report.AppendLine();
+
+            report.AppendLine(
+                "Dòng dưới có mặt để chặn cái sai **ngược lại**: đọc mỗi con số nghiệm thu rồi kết luận mô hình");
+            report.AppendLine(
+                "đọc kém, trong khi thật ra mấy tấm kia không có kết quả vì mạng rớt chứ không phải vì đọc sai.");
+            report.AppendLine("Xem dòng đếm ở đầu khối để biết chúng hỏng vì mã lỗi nào.");
         }
 
         report.AppendLine();
@@ -184,7 +234,7 @@ public static class MarkdownReport
         // Chỉ vai Core cộng điểm. ja-01-partial và neg-* chấm riêng ở dưới (TEST-SPEC mục 12).
         var core = runs.Where(run => run.Role == CardRole.Core).ToList();
 
-        report.AppendLine($"| Nhóm | Thẻ | {string.Join(" | ", fields)} |{(withTotal ? " Tổng |" : string.Empty)}");
+        report.AppendLine($"| Nhóm | Thẻ tính điểm | {string.Join(" | ", fields)} |{(withTotal ? " Tổng |" : string.Empty)}");
         report.AppendLine(
             $"|---|---|{string.Concat(Enumerable.Repeat("---|", fields.Count))}{(withTotal ? "---|" : string.Empty)}");
 
@@ -403,6 +453,14 @@ public static class MarkdownReport
         report.AppendLine("vì vậy `tokensIn` ở đây **cao hơn** lúc chạy thật.");
         report.AppendLine();
     }
+
+    private static string RoleName(CardRole role) => role switch
+    {
+        CardRole.AntiFabrication => "ca chống bịa",
+        CardRole.Negative => "ca âm tính",
+        CardRole.NoAnswer => "không có đáp án trong expected.json",
+        _ => "thẻ tính điểm",
+    };
 
     private static string GroupName(CardGroup group) => group switch
     {
