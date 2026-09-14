@@ -16,9 +16,14 @@ var options = builder.Configuration
 
 // Đường dẫn tương đối tính theo ContentRootPath chứ không theo working directory, để
 // `dotnet run --project src/PartnerCard.Web` chạy từ đâu cũng trỏ đúng Code\data\ (SPEC mục 13).
-var dataDirectory = Path.IsPathRooted(options.DataDirectory)
-    ? options.DataDirectory
-    : Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, options.DataDirectory));
+// Dữ liệu và nhật ký đi qua cùng một hàm: hai luật giải đường dẫn là mầm của hai thư mục lệch nhau.
+string UnderContentRoot(string path) =>
+    Path.IsPathRooted(path)
+        ? path
+        : Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, path));
+
+var dataDirectory = UnderContentRoot(options.DataDirectory);
+var logsDirectory = UnderContentRoot(JsonlAuditLogger.DefaultDirectory);
 
 builder.Services.AddSingleton(TimeProvider.System);
 
@@ -45,11 +50,22 @@ catch (InvalidOperationException ex)
 
 builder.Services.AddSingleton<ISchemaGuard, SchemaGuard>();
 
-// Bản ghi JSONL thật là T-11; tới đó thay dòng này.
-builder.Services.AddSingleton<IAuditLogger, NullAuditLogger>();
+// Nhật ký JSONL (SPEC mục 12): ghi thẳng, không hàng đợi. Singleton — giao diện Blazor và tool MCP dùng
+// chung một instance, tức chung một khoá ghi.
+builder.Services.AddSingleton<IAuditLogger>(sp => new JsonlAuditLogger(
+    logsDirectory,
+    sp.GetRequiredService<TimeProvider>(),
+    sp.GetRequiredService<ILogger<JsonlAuditLogger>>()));
 
 // Giao diện Blazor và tool MCP gọi cùng class này, không có đường đi riêng (SPEC mục 2).
 builder.Services.AddSingleton<CardPipeline>();
+
+// Mã phiên để nối nhật ký (SPEC mục 10.5): scoped — mỗi lời gọi MCP một bản, mỗi circuit Blazor một bản.
+builder.Services.AddSessionContext();
+
+// Tool MCP (SPEC mục 10.2). Gói 2.2.0 mặc định Stateless: không có Mcp-Session-Id, nên X-Session-Id
+// là thứ duy nhất nối các lời gọi của cùng một lượt làm việc. Đổi SessionMode là lệch SPEC — hỏi trước.
+builder.Services.AddMcpServer().WithHttpTransport().WithToolsFromAssembly();
 
 builder.Services
     .AddRazorComponents()
@@ -64,6 +80,9 @@ app.UseAntiforgery();
 // là cách rẻ nhất để biết cả ba thứ đều đúng: bind 0.0.0.0, tường lửa cổng 5080, cùng Wi-Fi.
 // Làm ở T-01 chứ không đợi T-12 — hỏng thì biết sớm mười ngày (SPEC mục 18.4).
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+// Phải khớp SessionContext.McpPath — chỉ lời gọi dưới đường dẫn này mới bị cảnh báo khi thiếu X-Session-Id.
+app.MapMcp("/mcp");
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

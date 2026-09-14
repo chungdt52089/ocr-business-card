@@ -28,4 +28,9 @@
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- SPEC mục 1 ghim đúng 2.2.0. Bản này mặc định Stateless — xem BACKLOG T-10. -->
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+  </ItemGroup>
+
 </Project>
