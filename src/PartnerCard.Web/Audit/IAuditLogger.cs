@@ -53,18 +53,13 @@ public sealed record AuditEntry(
     string? PromptVersion = null,
     string? ErrorCode = null);
 
+/// <summary>
+/// Bản cài thật là <see cref="JsonlAuditLogger"/> (SPEC mục 12).
+///
+/// **Không được ném.** <c>CardPipeline</c> gọi <see cref="Log"/> bên trong khối <c>try</c> của nó, nên một
+/// nhật ký hỏng mà ném sẽ biến lời gọi tool thành công thành thất bại.
+/// </summary>
 public interface IAuditLogger
 {
     void Log(AuditEntry entry);
-}
-
-/// <summary>
-/// Bản cài tạm cho Đợt 1: không ghi gì. Bản ghi file JSONL thật là T-11.
-/// </summary>
-public sealed class NullAuditLogger : IAuditLogger
-{
-    public void Log(AuditEntry entry)
-    {
-        // Cố ý rỗng.
-    }
 }
