@@ -1,9 +1,10 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PartnerCard.Tests.Fakes;
+using PartnerCard.Tests.Tools;
 using PartnerCard.Web.Audit;
-using PartnerCard.Web.Tools;
 
 namespace PartnerCard.Tests.Audit;
 
@@ -72,14 +73,23 @@ public sealed class SessionContextTests
         logger.Entries.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Bản T-10 kiểm bằng tool <c>ping</c>; T-11 gỡ <c>ping</c> nên kiểm bằng một tool thật — và nay có
+    /// nhật ký, nên soi được luôn mã tự sinh có thật sự đi tới dòng audit hay không.
+    /// </summary>
     [Fact]
-    public void M11_ping_van_chay_khi_thieu_header()
+    public async Task M11_tool_van_chay_khi_thieu_header()
     {
         var session = SessionContext.From(McpRequest(), new RecordingLogger());
+        using var harness = new ToolHarness(session: session);
 
-        var reply = new PingTool(session).Ping();
+        var result = await harness.ExtractAsync("en-01.png");
 
-        reply.Should().StartWith("pong").And.Contain(session.SessionId);
+        result.Ok.Should().BeTrue();
+
+        using var line = JsonDocument.Parse(harness.LogLines().Single());
+        line.RootElement.GetProperty("sessionId").GetString()
+            .Should().Be(session.SessionId).And.MatchRegex("^[0-9a-f]{12}$");
     }
 
     /// <summary>
