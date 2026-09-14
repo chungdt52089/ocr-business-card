@@ -567,3 +567,96 @@ Bộ đo gửi ảnh **nguyên 2560px**, còn ứng dụng thu nhỏ về 1600px
 (SPEC mục 11.3). Dự án không có thư viện ảnh nào (SPEC mục 1) nên bộ đo không thu nhỏ được, và
 vì vậy `tokensIn` ở đây **cao hơn** lúc chạy thật.
 
+
+## Lượt đo · 2026-09-14 09:57 +07:00
+
+```
+model         : gemini-3.5-flash-lite
+promptVersion : v1.4 — VÒNG TINH CHỈNH đầu tiên của T-09 (giữ hậu tố loại hình công ty trong searchAlias thẻ song ngữ), mốc so sánh v1.3 — đặc tả vốn đúng, KHÔNG phải vá lỗ đặc tả
+thinkingLevel : low
+ảnh           : tests/PartnerCard.Tests/TestData/realcards (ảnh chụp thật)
+nghỉ giữa lượt: 5s (15 RPM quan sát ngày 11/09)
+thử lại trần phút: có, chờ 60s, đúng một lần
+```
+
+`thinkingLevel` nằm trong `generationConfig` chứ không trong prompt, nên `promptVersion`
+không ghi lại được nó — vì vậy nó có một dòng riêng ở đây (SPEC mục 14).
+
+Ghi chú cạnh `promptVersion` phân biệt **hai loại thay đổi prompt**, và đó là mục đích duy
+nhất của nó. *Vá lỗ đặc tả* là prompt trước thiếu hẳn một luật nên mô hình làm đúng thứ nó
+được bảo; điểm lên là vì cái lỗ được vá. *Vòng tinh chỉnh* của T-09 mới là thử một cách diễn
+đạt khác để xem điểm có lên không. Trộn hai loại vào một bảng số thì T-09 sẽ tưởng mình vừa
+tìm ra một cách diễn đạt hiệu quả, rồi đi tối ưu tiếp theo hướng đó.
+
+**19/19 file gọi được · 18/18 thẻ tính điểm**
+
+**19 file ≠ 18 thẻ tính điểm.** Phần chênh là `ja-01-partial` (ca chống bịa).
+Phần chênh vẫn tiêu một request như mọi tấm khác, nhưng được chấm theo tiêu chí khác hẳn và
+**nằm ngoài 72 điểm** (TEST-SPEC mục 12) — xem mục riêng ở dưới. **Mọi mẫu số điểm số trong
+khối này đếm theo thẻ tính điểm, không theo file.**
+
+### Bốn trường bắt buộc — 18 thẻ tính điểm × 4 = 72 điểm
+
+| Nhóm | Thẻ tính điểm | fullName | company | phones | emails | Tổng |
+|---|---|---|---|---|---|---|
+| Anh | 8 | 8/8 | 8/8 | 8/8 | 8/8 | 32/32 (100,0%) |
+| Nhật + song ngữ | 10 | 10/10 | 10/10 | 10/10 | 10/10 | 40/40 (100,0%) |
+| **Tổng** | 18 | 18/18 | 18/18 | 18/18 | 18/18 | **72/72 (100,0%)** |
+
+### Trường phụ — báo cáo, không gate
+
+| Nhóm | Thẻ tính điểm | jobTitle | website | address | detectedLanguage | searchAlias |
+|---|---|---|---|---|---|---|
+| Anh | 8 | 8/8 | 8/8 | 7/8 | 8/8 | 8/8 |
+| Nhật + song ngữ | 10 | 10/10 | 10/10 | 9/10 | 10/10 | 7/10 |
+| **Tổng** | 18 | 18/18 | 18/18 | 16/18 | 18/18 | 15/18 |
+
+### Sai ở đâu
+
+| Thẻ | Trường | Kỳ vọng | Nhận được | Chỉ lỗi dấu? |
+|---|---|---|---|---|
+| en-07 | address | 2200 Foundry Road, Hamilton ON L8E 3P1 | 220 Foundry Road, Hamilton ON L8E 3P1 |  |
+| ja-03 | searchAlias | Suzuki Kenichi + Suzuki Kouzai + Aichi Nagoya Atsuta | Suzuki Kenichi Suzuki Kozai Aichi Nagoya Atsuta |  |
+| ja-05 | address | 〒812-0011 福岡県福岡市博多区博多駅前3-22-8 | 〒812-0011 福岡県福岡市博多区博多駅前3-22-6 |  |
+| ja-05 | searchAlias | Watanabe Takuma + Shirasagi Systems + Fukuoka Fukuoka Hakata | Watanabe Takuma Shirasagi Shisutemuzu Fukuoka Fukuoka Hakata |  |
+| ja-08 | searchAlias | Nakamura Aya + Umikaze Design + Hyogo Kobe Chuo | Nakamura Aya Kaikaze Design Hyogo Kobe Chuo |  |
+
+**Giới hạn của ảnh, không phải của prompt — đừng chỉnh prompt cho mấy chỗ này:**
+
+- `en-07` · `address` — Dòng địa chỉ nằm sát đáy thẻ, cỡ chữ nhỏ nhất, nét mảnh — phóng 2x thì hai chữ số 0 gần dính vào nhau. Mô hình đọc "2200" thành "220" ở **cả hai lượt đo 14/09**. Ứng dụng còn thu nhỏ ảnh về 1600px trước khi gửi, nên lúc chạy thật dòng này còn tệ hơn lúc đo. Prompt không làm nét chữ tách ra được.
+- `ja-05` · `address` — Thẻ nền tối, dòng địa chỉ ở đáy tương phản thấp (TEST-SPEC mục 12). Mô hình đọc nhầm chữ số 8 thành 6 ở **cả hai lượt đo độc lập**, và đây cũng là tấm chậm nhất của cả hai lượt. Chụp lại sáng hơn thì sửa được; sửa prompt thì không.
+
+### ja-01-partial — ca chống bịa (ngoài 72 điểm)
+
+`emails`: rỗng ✔ · `website`: rỗng ✔ → **ĐẠT**
+
+Tấm này bị cắt mất khối liên hệ. Mô hình thấy tên công ty nhưng **không hề thấy tên miền**,
+nên hai trường trên có giá trị nghĩa là nó đã suy ra thứ không nhìn thấy (TEST-SPEC mục 12).
+
+### fieldConfidence
+
+```
+min (trường có giá trị)      : 0,60
+trung vị (trường có giá trị) : 1,00
+số mục bằng đúng 1.0         : 135/138
+```
+
+Chỉ tính trên **trường có giá trị**: trường rỗng luôn được 0,0 theo SPEC mục 4.5, gộp vào thì
+`min` luôn bằng 0 và cả hai con số mất sạch ý nghĩa. `min` bằng 1,0 nghĩa là mô hình chấm 1.0
+cho mọi trường — khi ấy ngưỡng 0,9 của D-4 không bao giờ tô vàng gì, và điều 6 của prompt
+(SPEC mục 4.5) chưa ăn.
+
+### Độ trễ và token
+
+```
+p50 2.158 ms · p95 3.634 ms
+tokensIn 60.783 · tokensOut 4.760 · tổng 65.543
+```
+
+TEST-SPEC mục 11 ghi ngưỡng P-01 là p95 ≤ 8.000 ms. **Đó là ngưỡng đặt trước khi có số đo thật**
+nên ở đây chỉ in số cạnh nó, không phán ĐẠT/TRƯỢT — mục 11 vốn nói rõ "chỉ đo, không gate".
+
+Bộ đo gửi ảnh **nguyên 2560px**, còn ứng dụng thu nhỏ về 1600px trong trình duyệt trước khi gửi
+(SPEC mục 11.3). Dự án không có thư viện ảnh nào (SPEC mục 1) nên bộ đo không thu nhỏ được, và
+vì vậy `tokensIn` ở đây **cao hơn** lúc chạy thật.
+
