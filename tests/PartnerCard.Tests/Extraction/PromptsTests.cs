@@ -40,6 +40,12 @@ public sealed class PromptsTests
     // cấp nhưng im lặng về địa chỉ ba cấp, nên mô hình dừng ở cấp thứ hai (SPEC mục 4.5).
     [InlineData("lấy ĐỦ MỌI CẤP HÀNH CHÍNH")]
     [InlineData("đừng dừng lại ở cấp thứ hai")]
+    // Hậu tố loại hình ở thẻ song ngữ — vòng tinh chỉnh đầu tiên của T-09 (v1.4). Đặc tả vốn đã nói
+    // "chép đúng như in", chỉ prompt diễn đạt chưa tới: dưới v1.3 bi-01, bi-02 rơi mất "K.K.".
+    // Câu thứ hai giữ ranh giới với ví dụ 2 — thiếu nó thì luật mới đá vào thẻ thuần Nhật, và
+    // ja-01..ja-08 bắt đầu sai hậu tố theo chiều ngược lại (SPEC mục 4.5).
+    [InlineData("CHÉP NGUYÊN CHUỖI, kể cả hậu tố loại hình công ty")]
+    [InlineData("Chép bản in sẵn thì chép cả chuỗi")]
     // fieldConfidence — schema ép trả tám số, prompt phải nói chấm chúng thế nào.
     [InlineData("ĐỪNG ĐẶT 1.0 CHO MỌI TRƯỜNG THEO PHẢN XẠ")]
     [InlineData("0.5–0.8")]

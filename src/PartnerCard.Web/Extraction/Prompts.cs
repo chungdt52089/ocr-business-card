@@ -31,8 +31,15 @@ public static class Prompts
     /// về địa chỉ **ba** cấp (<c>兵庫県神戸市中央区</c>), nên mô hình lấy hai cấp đầu rồi dừng và
     /// đánh rơi tên quận. Hai lượt đo độc lập cùng sai đúng một kiểu ở đúng một tấm — dấu hiệu của
     /// một luật thiếu, không phải của một lần đọc trượt.
+    ///
+    /// <c>v1.4</c> — hậu tố loại hình công ty trong <c>searchAlias</c> của thẻ song ngữ. **Vòng
+    /// tinh chỉnh đầu tiên của T-09**, mốc so sánh là số của <c>v1.3</c>. Đặc tả vốn đã đúng ("chép
+    /// đúng như in"), chỉ prompt diễn đạt chưa tới: <c>bi-01</c>, <c>bi-02</c> giữ <c>K.K.</c> dưới
+    /// <c>v1.2</c> nhưng rơi mất ở 5/5 lượt dưới <c>v1.3</c>, khi khối luật địa danh chèn vào lấy
+    /// mất chỗ dựa của phần tên công ty. Sửa bằng một câu gắn vào luật song ngữ sẵn có, không thêm
+    /// khối nhấn mạnh — chính khối nhấn mạnh của <c>v1.3</c> gây ra lỗi này.
     /// </summary>
-    public const string Version = "v1.3";
+    public const string Version = "v1.4";
 
     /// <summary>
     /// Vì sao phiên bản này khác phiên bản trước — in cạnh <c>promptVersion</c> trong
@@ -46,7 +53,8 @@ public static class Prompts
     /// tưởng mình vừa tìm ra một cách diễn đạt hiệu quả, và đi tối ưu tiếp theo hướng đó.
     /// </summary>
     public const string VersionNote =
-        "vá lỗ đặc tả (địa danh ba cấp trong searchAlias), KHÔNG phải vòng tinh chỉnh của T-09";
+        "VÒNG TINH CHỈNH đầu tiên của T-09 (giữ hậu tố loại hình công ty trong searchAlias thẻ song ngữ), "
+        + "mốc so sánh v1.3 — đặc tả vốn đúng, KHÔNG phải vá lỗ đặc tả";
 
     /// <summary>
     /// Sáu điều theo đúng thứ tự ưu tiên của SPEC mục 4.5, cộng hai ví dụ. Hai ví dụ dùng nhân
@@ -87,7 +95,10 @@ public static class Prompts
              "Ryoko Morishita", "Minatoya Instruments K.K."
              Không đảo thứ tự tên, không tự phiên âm lại thành "Morishita Ryoko"
              hay "Minatoya Keiki".
+             CHÉP NGUYÊN CHUỖI, kể cả hậu tố loại hình công ty (K.K., Co., Ltd., Inc.).
            - Chỉ tự phiên âm khi thẻ KHÔNG in sẵn bản Latin.
+             Tự phiên âm thì chỉ phiên âm danh từ riêng: hậu tố loại hình là danh từ chung,
+             không đưa vào searchAlias (ví dụ 2 bỏ 有限会社). Chép bản in sẵn thì chép cả chuỗi.
 
         searchAlias — CHỈ dùng cho thẻ có chữ Nhật
            Ghi phiên âm Latin của TÊN NGƯỜI, TÊN CÔNG TY, và ĐỊA DANH HÀNH CHÍNH

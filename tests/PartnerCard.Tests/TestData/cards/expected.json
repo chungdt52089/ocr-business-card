@@ -151,10 +151,10 @@
     "website": "mirai-giken.example",
     "address": "〒532-0011 大阪府大阪市淀川区西中島4-11-2",
     "detectedLanguage": "ja",
-    "cityLatin": "Osaka Yodogawa",
+    "cityLatin": "Osaka Osaka Yodogawa",
     "fullNameLatin": "Sato Misaki",
     "companyLatin": "Mirai Giken",
-    "searchAlias": "Sato Misaki Mirai Giken Osaka Yodogawa"
+    "searchAlias": "Sato Misaki Mirai Giken Osaka Osaka Yodogawa"
   },
   "ja-03": {
     "isBusinessCard": true,
@@ -208,10 +208,10 @@
     "website": "shirasagi-sys.example",
     "address": "〒812-0011 福岡県福岡市博多区博多駅前3-22-8",
     "detectedLanguage": "ja",
-    "cityLatin": "Fukuoka Hakata",
+    "cityLatin": "Fukuoka Fukuoka Hakata",
     "fullNameLatin": "Watanabe Takuma",
     "companyLatin": "Shirasagi Systems",
-    "searchAlias": "Watanabe Takuma Shirasagi Systems Fukuoka Hakata"
+    "searchAlias": "Watanabe Takuma Shirasagi Systems Fukuoka Fukuoka Hakata"
   },
   "ja-06": {
     "isBusinessCard": true,
