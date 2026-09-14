@@ -34,10 +34,13 @@ public sealed class HostileExtractor : IExtractor
         }
         """;
 
-    public Task<string> ExtractRawAsync(
+    /// <summary>Nó cũng là một extractor đã chạy thật, nên <c>Model</c> mang tên của chính nó.</summary>
+    public static readonly ExtractionUsage Usage = new(0, 0, 0, "hostile", "-");
+
+    public Task<RawExtraction> ExtractRawAsync(
         ReadOnlyMemory<byte> imageBytes, string mimeType, string? languageHint,
         string? sourceName, CancellationToken ct) =>
-        Task.FromResult(Json);
+        Task.FromResult(new RawExtraction(Json, Usage));
 
     public Task<CardExtractionResult> ExtractAsync(
         ReadOnlyMemory<byte> imageBytes, string mimeType, string? languageHint,

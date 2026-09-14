@@ -20,9 +20,20 @@ public sealed class PartnerCardOptions
     /// </summary>
     public string Extractor { get; set; } = ExtractorNames.Fake;
 
-    public string Model { get; set; } = "gemini-3.8-flash";
+    /// <summary>
+    /// Đổi sang Flash Lite ngày 11/09 sau khi đo: **72/72 ở cả hai lượt độc lập**, p50 khoảng
+    /// 2,0–2,7 giây, và hạn mức rộng hơn hẳn — 15 RPM / 500 RPD so với 5 RPM / 20 RPD của
+    /// `gemini-3.8-flash` (SPEC mục 4.3 và 4.6). Trần ngày 20 của 3.8 Flash không đủ cho **hai**
+    /// lượt đo 19 thẻ, tức không đủ để làm phép so trước–sau mà T-09 sống bằng nó.
+    ///
+    /// Giữ đúng chuỗi này khớp `appsettings.json`: để hai nơi lệch nhau thì bản clone thiếu file
+    /// cấu hình sẽ chạy một model khác với model đã nghiệm thu, và không có gì báo.
+    /// </summary>
+    public string Model { get; set; } = "gemini-3.5-flash-lite";
 
-    public string PromptVersion { get; set; } = "v1";
+    // PromptVersion cố ý KHÔNG có ở đây: nó là hằng Prompts.Version, nằm cạnh chính chuỗi
+    // prompt được gửi đi (SPEC mục 13). Để trong cấu hình thì sửa prompt mà quên đổi số là
+    // hồ sơ ghi một phiên bản chưa từng được gửi.
 
     /// <summary>Trần 8 MB theo NFR-4, nằm an toàn dưới trần 20 MB của Gemini (SPEC mục 4.2).</summary>
     public int MaxImageBytes { get; set; } = 8 * 1024 * 1024;

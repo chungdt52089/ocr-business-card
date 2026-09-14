@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PartnerCard.Eval</RootNamespace>
+    <AssemblyName>PartnerCard.Eval</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    KHÔNG có PackageReference nào, và đó là cố ý (SPEC mục 1 khoá danh sách phụ thuộc).
+    IConfiguration, ConfigurationBuilder và IOptions<> tới đây qua FrameworkReference
+    Microsoft.AspNetCore.App, thứ chảy sang theo ProjectReference dưới đây — đúng cách
+    PartnerCard.Tests đang dùng chúng mà cũng không khai package nào.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../../src/PartnerCard.Web/PartnerCard.Web.csproj" />
+  </ItemGroup>
+
+</Project>

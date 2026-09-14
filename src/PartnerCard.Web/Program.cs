@@ -25,13 +25,15 @@ builder.Services.AddSingleton(TimeProvider.System);
 try
 {
     // Kiểm cấu hình và khoá trước tiên: thiếu khoá ở chế độ gemini thì chết ngay (I-07).
-    builder.Services.AddSingleton(SecretLoader.Load(builder.Configuration, options));
+    var secrets = SecretLoader.Load(builder.Configuration, options);
+    builder.Services.AddSingleton(secrets);
 
     // Nạp một lần lúc khởi động. File hỏng thì chết ngay kèm thông báo rõ (S-12).
     builder.Services.AddSingleton<IPartnerStore>(
         JsonPartnerStore.LoadFrom(dataDirectory, TimeProvider.System));
 
-    builder.Services.AddSingleton<IExtractor>(SelectExtractor(options));
+    builder.Services.AddSingleton(ExtractorFactory.Create(
+        options, secrets, ExtractorFactory.DefaultExpectedJsonPath));
 }
 catch (InvalidOperationException ex)
 {
@@ -69,24 +71,6 @@ app.MapRazorComponents<App>()
 app.Run();
 
 return 0;
-
-// Chọn bản cài IExtractor theo cấu hình (SPEC mục 4.1). SecretLoader đã loại giá trị lạ,
-// nên tới đây chỉ còn hai nhánh hợp lệ.
-static IExtractor SelectExtractor(PartnerCardOptions options)
-{
-    if (options.RequiresApiKey)
-    {
-        throw new InvalidOperationException(
-            "Chưa có GeminiExtractor — nó thuộc T-07. " +
-            $"Đặt {PartnerCardOptions.SectionName}:Extractor = \"{ExtractorNames.Fake}\" " +
-            "để chạy đường ống offline.");
-    }
-
-    // Bảng đáp án được csproj chép sang output, nên tìm theo thư mục chứa binary
-    // chứ không theo working directory.
-    return new FakeExtractor(ExpectedCards.LoadFrom(
-        Path.Combine(AppContext.BaseDirectory, "fakedata", "expected.json")));
-}
 
 // Để test dựng được host mà không phải mở public thứ gì khác.
 public partial class Program;

@@ -1,0 +1,115 @@
+using System.Text.Json.Nodes;
+using PartnerCard.Web.Extraction;
+
+namespace PartnerCard.Tests.Extraction;
+
+/// <summary>
+/// Prompt là thứ quyết định phần lớn chất lượng đọc, nhưng chất lượng đó chỉ đo được ở bộ đo
+/// T-08 với mô hình thật. Nhóm ca này chỉ giữ hai thứ mà `dotnet test` giữ được:
+/// prompt **có nói đủ** các luật SPEC mục 4.5, và nó **không dạy đáp án** cho bộ đo.
+/// </summary>
+[Trait("Category", "Extract")]
+public sealed class PromptsTests
+{
+    private static string ExpectedJsonPath =>
+        Path.Combine(AppContext.BaseDirectory, "TestData", "cards", "expected.json");
+
+    [Fact]
+    public void Co_phien_ban_prompt_va_no_khong_rong()
+    {
+        Prompts.Version.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Theory]
+    // Luật 1 — không suy luận. Đây là dạng bịa phổ biến nhất (ca X-07).
+    [InlineData("Không đoán email từ tên miền website")]
+    [InlineData("Không thêm mã quốc gia")]
+    // Luật 2 — thà thiếu còn hơn sai.
+    [InlineData("ĐỂ CHUỖI RỖNG")]
+    // Luật 3 — giữ nguyên chữ gốc.
+    [InlineData("株式会社")]
+    // Luật 4 — không phải danh thiếp.
+    [InlineData("isBusinessCard = false")]
+    // searchAlias — ranh giới quan trọng nhất của nó.
+    [InlineData("KHÔNG DỊCH CHỨC DANH")]
+    // Thẻ song ngữ — luật thêm ở v1.2. Thiếu nó thì mô hình ghép hai hệ chữ vào một trường,
+    // và đó là lỗ đặc tả chứ không phải lỗi đọc (SPEC mục 4.5).
+    [InlineData("CHỌN MỘT, KHÔNG GHÉP")]
+    [InlineData("Chỉ tự phiên âm khi thẻ KHÔNG in sẵn bản Latin")]
+    // Địa danh ba cấp — luật thêm ở v1.3. Luật cũ nói "tỉnh/thành và quận", đúng với địa chỉ hai
+    // cấp nhưng im lặng về địa chỉ ba cấp, nên mô hình dừng ở cấp thứ hai (SPEC mục 4.5).
+    [InlineData("lấy ĐỦ MỌI CẤP HÀNH CHÍNH")]
+    [InlineData("đừng dừng lại ở cấp thứ hai")]
+    // Hậu tố loại hình ở thẻ song ngữ — vòng tinh chỉnh đầu tiên của T-09 (v1.4). Đặc tả vốn đã nói
+    // "chép đúng như in", chỉ prompt diễn đạt chưa tới: dưới v1.3 bi-01, bi-02 rơi mất "K.K.".
+    // Câu thứ hai giữ ranh giới với ví dụ 2 — thiếu nó thì luật mới đá vào thẻ thuần Nhật, và
+    // ja-01..ja-08 bắt đầu sai hậu tố theo chiều ngược lại (SPEC mục 4.5).
+    [InlineData("CHÉP NGUYÊN CHUỖI, kể cả hậu tố loại hình công ty")]
+    [InlineData("Chép bản in sẵn thì chép cả chuỗi")]
+    // fieldConfidence — schema ép trả tám số, prompt phải nói chấm chúng thế nào.
+    [InlineData("ĐỪNG ĐẶT 1.0 CHO MỌI TRƯỜNG THEO PHẢN XẠ")]
+    [InlineData("0.5–0.8")]
+    public void Prompt_noi_du_cac_luat_cua_SPEC_4_5(string fragment)
+    {
+        Prompts.ExtractCard.Should().Contain(fragment);
+    }
+
+    [Fact]
+    public void Prompt_khong_chua_bat_ky_dap_an_nao_cua_bo_mau()
+    {
+        // Nhét một tấm thẻ của bộ đo vào prompt là dạy mô hình đáp án rồi tự đo lại chính mình:
+        // con số nghiệm thu sẽ đẹp lên mà không có gì thật sự tốt hơn. Đúng loại "sai mà trông
+        // như đúng" mà cả dự án được dựng để chặn.
+        var expected = JsonNode.Parse(File.ReadAllText(ExpectedJsonPath))!.AsObject();
+
+        // Chỉ trường kiểu chuỗi: phones và emails là mảng, GetValue<string>() sẽ ném.
+        //
+        // address, cityLatin và searchAlias thêm ngày 11/09. Ba trường này không nằm trong 4 trường
+        // tính điểm, nên bản trước bỏ qua chúng — nhưng `searchAlias` chính là trường `v1.3` sinh
+        // ra để sửa, và một ví dụ chạm vào đáp án của nó thì `v1.3` đang tự chấm bài của mình.
+        string[] fields = ["fullName", "company", "website", "address", "cityLatin", "searchAlias"];
+
+        var answers = expected
+            .SelectMany(card => fields.Select(field => card.Value![field]?.GetValue<string>()))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct()
+            .ToList();
+
+        answers.Should().NotBeEmpty("phải có đáp án để đối chiếu thì ca này mới có nghĩa");
+
+        // Lọc ra TRƯỚC rồi mới khẳng định, chứ không dùng OnlyContain: OnlyContain đỏ thì in cả
+        // chuỗi prompt ra màn hình mà không nói giá trị nào trùng, và người đọc phải tự dò tay.
+        var leaked = answers.Where(answer => Prompts.ExtractCard.Contains(answer!)).ToList();
+
+        leaked.Should().BeEmpty(
+            "prompt không được chứa đáp án nào của bộ mẫu — nhét một tấm thẻ của bộ đo vào prompt "
+            + "là dạy mô hình đáp án rồi tự đo lại chính mình");
+    }
+
+    [Fact]
+    public void Vi_du_trong_prompt_co_fieldConfidence_va_khong_toan_1_0()
+    {
+        // Hai ví dụ có tác dụng hơn mọi câu mô tả — nhưng ví dụ nào cũng 1.0 tất tay thì nó dạy
+        // đúng cái thói quen ta vừa cấm ở trên. Ví dụ 2 phải có ít nhất một trường dưới 1.0.
+        var examples = Prompts.ExtractCard[Prompts.ExtractCard.IndexOf("VÍ DỤ 1", StringComparison.Ordinal)..];
+
+        examples.Should().Contain("fieldConfidence");
+        examples.Should().Contain("0.7", "phải có một trường đọc được nhưng không sắc nét");
+    }
+
+    [Fact]
+    public void Tam_truong_trong_phan_fieldConfidence_khop_dung_CardSchema()
+    {
+        // Prompt liệt kê thiếu một trường thì mô hình bỏ qua trường đó, và SG-3 chặn cả tấm thẻ.
+        var scale = Prompts.ExtractCard[Prompts.ExtractCard.IndexOf("fieldConfidence — CHẤM", StringComparison.Ordinal)..];
+
+        scale.Should().ContainAll(CardSchema.ConfidenceRequiredFields);
+    }
+
+    [Fact]
+    public void Prompt_khong_bao_mo_hinh_boc_ket_qua_trong_markdown()
+    {
+        // Guard xoá mọi giá trị mang dấu vết ```json (SG-6), nên prompt phải nói ngược lại.
+        Prompts.ExtractCard.Should().Contain("Không viết lời dẫn, không dùng markdown");
+    }
+}
