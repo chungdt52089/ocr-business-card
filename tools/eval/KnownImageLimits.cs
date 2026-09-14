@@ -21,6 +21,11 @@ public static class KnownImageLimits
             "Thẻ nền tối, dòng địa chỉ ở đáy tương phản thấp (TEST-SPEC mục 12). Mô hình đọc nhầm "
             + "chữ số 8 thành 6 ở **cả hai lượt đo độc lập**, và đây cũng là tấm chậm nhất của cả "
             + "hai lượt. Chụp lại sáng hơn thì sửa được; sửa prompt thì không.",
+        [("en-07", "address")] =
+            "Dòng địa chỉ nằm sát đáy thẻ, cỡ chữ nhỏ nhất, nét mảnh — phóng 2x thì hai chữ số 0 gần "
+            + "dính vào nhau. Mô hình đọc \"2200\" thành \"220\" ở **cả hai lượt đo 14/09**. Ứng dụng "
+            + "còn thu nhỏ ảnh về 1600px trước khi gửi, nên lúc chạy thật dòng này còn tệ hơn lúc đo. "
+            + "Prompt không làm nét chữ tách ra được.",
     };
 
     public static string? For(string cardCode, string field) =>
