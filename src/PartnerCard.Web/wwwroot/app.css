@@ -4,3 +4,126 @@ body {
     margin: 2rem;
     line-height: 1.5;
 }
+
+/* ---- Trang chụp — T-12 ---------------------------------------------------- */
+
+.capture {
+    margin: 1.5rem 0;
+}
+
+/* Ẩn thẻ input thật nhưng KHÔNG dùng display:none — <label for> phải còn mở được app camera.
+   Nút mặc định của input file quá nhỏ cho ngón tay trên điện thoại. */
+.capture-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.capture-button {
+    display: inline-block;
+    padding: 1rem 1.5rem;
+    font-size: 1.1rem;
+    border-radius: 0.5rem;
+    background: #14622f;
+    color: #fff;
+    cursor: pointer;
+}
+
+.capture-button.is-busy {
+    background: #8a8a8a;
+    cursor: default;
+}
+
+.capture-hint {
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.capture-preview {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1rem 0 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 0.25rem;
+}
+
+.capture-size {
+    font-size: 0.9rem;
+    color: #333;
+}
+
+.waiting {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 1rem 0;
+    font-size: 1.05rem;
+}
+
+.spinner {
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 3px solid #ccc;
+    border-top-color: #14622f;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.result {
+    margin: 1rem 0;
+    padding: 0.8rem 1rem;
+    border-radius: 0.25rem;
+}
+
+.result-error {
+    background: #fdecea;
+    border-left: 4px solid #c0392b;
+}
+
+.result-reject {
+    background: #fff6e0;
+    border-left: 4px solid #d9900a;
+}
+
+.result-code {
+    margin: 0.3rem 0 0;
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.fields {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.35rem 1rem;
+    margin: 1rem 0;
+}
+
+.fields dt {
+    font-weight: 600;
+    color: #444;
+}
+
+.fields dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.muted {
+    color: #666;
+    font-size: 0.85rem;
+}
+
+/* Điện thoại: bớt lề, và bảng trường xuống một cột cho đỡ vỡ. */
+@media (max-width: 480px) {
+    body { margin: 1rem; }
+
+    .fields { grid-template-columns: 1fr; gap: 0; }
+    .fields dd { margin-bottom: 0.6rem; }
+}
