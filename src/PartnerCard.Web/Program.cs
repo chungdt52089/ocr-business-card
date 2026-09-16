@@ -50,6 +50,13 @@ catch (InvalidOperationException ex)
 
 builder.Services.AddSingleton<ISchemaGuard, SchemaGuard>();
 
+// Ảnh gốc trên đĩa — data/images/<sha256>.jpg (SPEC mục 4.1). Dùng chung biến dataDirectory với
+// JsonPartnerStore: hai luật giải đường dẫn là mầm của hai thư mục lệch nhau.
+//
+// Đường ống KHÔNG gọi nó. Nhánh trích xuất không persist gì (SPEC mục 2), nên chỗ ghi ảnh là
+// tầng giao diện — nơi có byte ảnh trong tay, và chỉ ghi sau khi Validate đã cho qua.
+builder.Services.AddSingleton(new ImageStore(dataDirectory));
+
 // Nhật ký JSONL (SPEC mục 12): ghi thẳng, không hàng đợi. Singleton — giao diện Blazor và tool MCP dùng
 // chung một instance, tức chung một khoá ghi.
 builder.Services.AddSingleton<IAuditLogger>(sp => new JsonlAuditLogger(
@@ -69,7 +76,13 @@ builder.Services.AddMcpServer().WithHttpTransport().WithToolsFromAssembly();
 
 builder.Services
     .AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents()
+    // Blazor Server chuyển chuỗi base64 của ảnh qua SignalR, và mặc định của HubOptions là 32 KB
+    // — chặn ngay tấm ảnh đầu tiên (SPEC mục 11.3). 1600px q80 thường dưới 400 KB nên 2 MB là dư.
+    //
+    // Trần này áp cho CHUỖI BASE64, không phải byte JPEG: base64 dài hơn 1,333 lần, nên 1,5 MB
+    // JPEG là đúng 2,0 MB trên dây. Trang chụp in cả hai con số vì lý do đó.
+    .AddHubOptions(hub => hub.MaximumReceiveMessageSize = 2 * 1024 * 1024);
 
 var app = builder.Build();
 

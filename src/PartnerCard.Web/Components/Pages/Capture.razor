@@ -1,0 +1,319 @@
+@page "/"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject CardPipeline Pipeline
+@inject ImageStore Images
+@inject SessionContext Session
+@inject IJSRuntime JS
+
+@*
+    Trang chụp — T-12, SPEC mục 11.
+
+    Gọi ĐÚNG CardPipeline mà tool MCP gọi (CLAUDE.md luật cứng 5). Không inject IExtractor, không
+    gọi IAuditLogger: đường ống đã ghi audit, y như tầng tool không ghi. Giao diện có đường đi
+    riêng thì mọi bảo đảm của đường ống đều vô nghĩa.
+
+    Trang dừng ở kết quả CHỈ ĐỌC. Sửa trường, tô trường dưới 0,9 và nút Lưu là T-13 (/review).
+*@
+
+<PageTitle>Chụp danh thiếp</PageTitle>
+
+<h1>Chụp danh thiếp</h1>
+
+<div class="capture">
+    @* Thẻ input THÔ, không dùng <InputFile>: thẻ đó stream nguyên file 12MP lên server qua
+       SignalR, tức làm đúng cái việc mà bước thu nhỏ ở capture.js sinh ra để tránh. *@
+    <input id="cardFile" type="file" accept="image/*" capture="environment"
+           class="capture-input" @ref="_fileInput" @onchange="OnCapturedAsync" disabled="@Busy" />
+    <label class="@(Busy ? "capture-button is-busy" : "capture-button")" for="cardFile">
+        Chụp hoặc chọn ảnh danh thiếp
+    </label>
+    <p class="capture-hint">
+        Điện thoại mở app camera gốc. Máy tính hiện hộp chọn file.
+    </p>
+</div>
+
+@if (_jsError is not null)
+{
+    <div class="result result-error">
+        <p>Không xử lý được ảnh trong trình duyệt.</p>
+        <p class="result-code">@_jsError</p>
+    </div>
+}
+
+@if (Busy)
+{
+    @* Chỉ báo chờ là BẮT BUỘC (SPEC mục 11.4). Đồng hồ giây chứ không phải spinner tĩnh: ngày
+       10/09 từng có lượt 23 giây, và ở giây thứ 23 một spinner đứng yên vẫn trông như treo. *@
+    <div class="waiting" role="status" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>
+            @(_phase == Phase.Shrinking ? "Đang thu nhỏ ảnh…" : "Đang đọc danh thiếp…")
+            @if (_elapsedSeconds > 0)
+            {
+                <text>(@_elapsedSeconds giây)</text>
+            }
+        </span>
+    </div>
+}
+
+@if (_preview is not null)
+{
+    @* Ảnh xem trước lấy từ chuỗi base64 đang nằm trong bộ nhớ, KHÔNG đọc đĩa. Endpoint phục vụ
+       ảnh từ data/images/ thuộc T-13, lúc /review cần nó — và nó phải là endpoint riêng có kiểm
+       đường dẫn, không bao giờ là UseStaticFiles trỏ vào data/ (SPEC mục 11.3). *@
+    <img class="capture-preview" src="@_preview" alt="Ảnh danh thiếp vừa chụp" />
+
+    @* In CẢ HAI con số. Chuỗi base64 dài hơn byte JPEG 1,333 lần, và chính chuỗi đó mới là thứ
+       đi qua SignalR: 1,5 MB JPEG = 2,0 MB base64 = đúng bằng trần. Chỉ in byte giải mã thì
+       người đọc thấy "1,4 MB, đạt" trong khi payload thật sát trần tới mức đứt kết nối — mà lỗi
+       ấy trông y hệt treo máy. *@
+    <p class="capture-size">
+        Ảnh gửi lên: <strong>@Size(_jpegBytes) JPEG</strong> (ngưỡng T-12: 1,5 MB)
+        · <strong>@Size(_base64Bytes) qua SignalR</strong> (trần: 2 MB)
+        · @_width×@_height
+        @* Tên file gửi lên dưới dạng sourceName. Hiện nó ra vì ở chế độ fake, đây là KHOÁ TRA
+           expected.json: điện thoại đặt tên mọi ảnh là image.jpg nên không khớp mã thẻ nào, và
+           không thấy dòng này thì kết quả "không phải danh thiếp" trông như một lỗi. *@
+        · tên file: <code>@Show(_sourceImage ?? string.Empty)</code>
+    </p>
+}
+
+@if (_phase == Phase.Done && _outcome is { } outcome)
+{
+    @if (!outcome.Ok)
+    {
+        <div class="result result-error">
+            <p>@outcome.Message</p>
+            @* Mã lỗi đi ra nguyên vẹn. "Thông báo trung tính" nghĩa là giấu stack trace và đường
+               dẫn file, KHÔNG phải giấu nguyên nhân: quota_exhausted khác hẳn extract_failed, và
+               bảo người dùng chụp lại rõ hơn khi thật ra đã hết hạn mức là tiêu thêm quota. *@
+            <p class="result-code">mã lỗi: @outcome.ErrorCode</p>
+        </div>
+    }
+    else if (outcome.Card is { IsBusinessCard: false } rejected)
+    {
+        <div class="result result-reject">
+            <p><strong>Đây không phải danh thiếp.</strong></p>
+            <p>@rejected.RejectReason</p>
+        </div>
+    }
+    else if (outcome.Card is { } card)
+    {
+        <dl class="fields">
+            <dt>Họ tên</dt><dd>@Show(card.FullName)</dd>
+            <dt>Chức danh</dt><dd>@Show(card.JobTitle)</dd>
+            <dt>Công ty</dt><dd>@Show(card.Company)</dd>
+            <dt>Điện thoại</dt><dd>@Show(string.Join(" · ", card.Phones))</dd>
+            <dt>Email</dt><dd>@Show(string.Join(" · ", card.Emails))</dd>
+            <dt>Website</dt><dd>@Show(card.Website)</dd>
+            <dt>Địa chỉ</dt><dd>@Show(card.Address)</dd>
+            <dt>Ngôn ngữ</dt><dd>@Show(card.DetectedLanguage)</dd>
+            @* Nhãn "gợi ý tìm kiếm" là một trong ba ràng buộc giữ searchAlias khỏi thành dữ liệu
+               giả (SPEC mục 4.4). Nó không phải trường tên. *@
+            <dt>Gợi ý tìm kiếm</dt><dd>@Show(card.SearchAlias)</dd>
+        </dl>
+
+        <p class="muted">
+            @_usage.Model · @_usage.PromptVersion · @_usage.LatencyMs ms
+            @if (_imageSha256 is not null)
+            {
+                <text> · đã lưu data/images/@(_imageSha256[..8])….jpg</text>
+            }
+        </p>
+
+        <p class="muted">
+            Chỉ đọc. Sửa trường, tô trường có độ tin cậy dưới 0,9 và nút Lưu là T-13 (<code>/review</code>).
+        </p>
+    }
+}
+
+@code {
+    private const int MaxEdge = 1600;
+    private const double Quality = 0.8;
+
+    /// <summary>Canvas luôn nén ra JPEG, nên mime là hằng chứ không đoán từ file người chọn.</summary>
+    private const string JpegMime = "image/jpeg";
+
+    private enum Phase { Idle, Shrinking, Extracting, Done }
+
+    private ElementReference _fileInput;
+    private IJSObjectReference? _module;
+    private CancellationTokenSource? _cts;
+    private Timer? _ticker;
+
+    private Phase _phase = Phase.Idle;
+    private int _elapsedSeconds;
+    private string? _jsError;
+
+    private string? _preview;
+    private int _width;
+    private int _height;
+    private long _jpegBytes;
+    private long _base64Bytes;
+
+    private ExtractOutcome? _outcome;
+
+    // Ba giá trị T-13 cần để dựng PartnerDraft lúc bấm Lưu (SPEC mục 4.1 và 10.6). Nhánh lưu
+    // KHÔNG trích xuất nên tự nó không với tới được cái nào — chúng phải đi vòng qua đây.
+    //
+    // T-12 giữ chúng trong chính component này, chưa dựng chỗ chứa dùng chung: /review chưa tồn
+    // tại, nên một service scoped bây giờ là plumbing không ai dùng. T-13 nhấc ba dòng này ra.
+    // _sourceImage có ngay sau khi thu nhỏ, kể cả khi ảnh hoá ra không phải danh thiếp — nó là
+    // tên file, không phải một lời hứa về nội dung. _imageSha256 chỉ có khi đã ghi được ảnh
+    // xuống đĩa, nên null ở đây nghĩa là chưa có gì để T-13 lưu.
+    private string? _sourceImage;  // tên file gốc  → PartnerDraft.SourceImage
+    private string? _imageSha256;  // mã băm        → PartnerDraft.ImageSha256, và là tên file trên đĩa
+    private ExtractionUsage _usage = ExtractionUsage.Untracked;  // → PartnerDraft.Usage
+
+    private bool Busy => _phase is Phase.Shrinking or Phase.Extracting;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/capture.js");
+        }
+    }
+
+    private async Task OnCapturedAsync()
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        Reset();
+        _phase = Phase.Shrinking;
+        StateHasChanged();
+
+        var captured = await _module.InvokeAsync<Captured?>("shrink", _fileInput, MaxEdge, Quality);
+        if (captured is null)
+        {
+            _phase = Phase.Idle;
+            return;
+        }
+
+        if (!captured.Ok)
+        {
+            _jsError = captured.Error;
+            _phase = Phase.Idle;
+            return;
+        }
+
+        _preview = $"data:{JpegMime};base64,{captured.Base64}";
+        _sourceImage = captured.FileName;
+        _width = captured.Width;
+        _height = captured.Height;
+        _base64Bytes = captured.Base64.Length;
+        _jpegBytes = DecodedBytes(captured.Base64);
+
+        _phase = Phase.Extracting;
+        StartTicker();
+        StateHasChanged();
+
+        _cts = new CancellationTokenSource();
+
+        try
+        {
+            var outcome = await Pipeline.ExtractAsync(
+                captured.Base64, JpegMime,
+                languageHint: null, sourceName: captured.FileName,
+                _cts.Token, Session.SessionId);
+
+            _outcome = outcome;
+            _usage = outcome.Usage;
+
+            // Ghi ảnh SAU khi trích xuất, không trước. Validate nằm bên trong ExtractAsync; ảnh
+            // sai mime hoặc quá trần bị chặn ở đó, và SPEC mục 2 nói rõ lần từ chối ấy không đổi
+            // trạng thái gì. Ảnh không phải danh thiếp cũng không ghi: người dùng sẽ chụp lại.
+            if (outcome is { Ok: true, Card.IsBusinessCard: true })
+            {
+                _imageSha256 = await Images.SaveAsync(captured.Base64, _cts.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Rời trang giữa chừng. Đường ống cố ý ném lại thay vì nuốt thành kết quả, và ở đây
+            // thì không còn màn hình nào để hiện lỗi lên.
+        }
+        finally
+        {
+            StopTicker();
+            _phase = Phase.Done;
+        }
+    }
+
+    private void Reset()
+    {
+        _jsError = null;
+        _preview = null;
+        _width = _height = 0;
+        _jpegBytes = _base64Bytes = 0;
+        _outcome = null;
+        _sourceImage = null;
+        _imageSha256 = null;
+        _usage = ExtractionUsage.Untracked;
+    }
+
+    private void StartTicker()
+    {
+        _elapsedSeconds = 0;
+        _ticker = new Timer(
+            _ =>
+            {
+                _elapsedSeconds++;
+                InvokeAsync(StateHasChanged);
+            },
+            null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void StopTicker()
+    {
+        _ticker?.Dispose();
+        _ticker = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        StopTicker();
+        _cts?.Cancel();
+        _cts?.Dispose();
+
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit đã đứt thì không còn gì bên kia để dọn.
+            }
+        }
+    }
+
+    private static string Show(string value) =>
+        string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    /// <summary>
+    /// Số byte JPEG thật, suy từ độ dài base64: bốn ký tự mã hoá ba byte, trừ phần đệm.
+    /// </summary>
+    private static long DecodedBytes(string base64)
+    {
+        var padding = base64.EndsWith("==", StringComparison.Ordinal) ? 2
+            : base64.EndsWith('=') ? 1
+            : 0;
+
+        return (long)base64.Length / 4 * 3 - padding;
+    }
+
+    private static string Size(long bytes) =>
+        bytes >= 1024 * 1024
+            ? (bytes / 1024d / 1024d).ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',') + " MB"
+            : $"{bytes / 1024} KB";
+
+    /// <summary>Hình dạng <c>shrink()</c> ở <c>wwwroot/js/capture.js</c> trả về.</summary>
+    private sealed record Captured(
+        bool Ok, string Error, string Base64, string FileName, int Width, int Height);
+}
