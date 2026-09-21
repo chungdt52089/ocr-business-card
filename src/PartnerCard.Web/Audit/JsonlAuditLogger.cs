@@ -31,16 +31,6 @@ public sealed class JsonlAuditLogger(
     ILogger<JsonlAuditLogger> logger) : IAuditLogger
 {
     /// <summary>
-    /// Tính theo <c>ContentRootPath</c> bằng đúng hàm giải <c>DataDirectory</c> (SPEC mục 13), nên trỏ tới
-    /// <c>Code\logs\</c>.
-    ///
-    /// Cố ý là hằng, không phải khoá cấu hình: SPEC mục 13 không có khoá này, và thêm khoá thì phải thêm ở
-    /// cả <c>appsettings.json</c>, <c>PartnerCardOptions</c> lẫn SPEC — lệch một nơi là cái bẫy đã cắn dự án
-    /// này một lần với <c>Model</c>.
-    /// </summary>
-    public const string DefaultDirectory = "../../logs";
-
-    /// <summary>
     /// <c>UnsafeRelaxedJsonEscaping</c> để chữ Nhật và tiếng Việt nằm nguyên trong file. Để mặc định thì
     /// <c>Nguyễn</c> thành <c>Nguy\u1EC5n</c>, và phép thử <c>findstr /C:"Nguyễn" logs\*.jsonl</c> của SPEC
     /// mục 12 **luôn xanh giả** kể cả khi dữ liệu đã lọt. Ký tự điều khiển vẫn bị escape, nên một
