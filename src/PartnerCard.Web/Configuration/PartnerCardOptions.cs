@@ -14,6 +14,17 @@ public sealed class PartnerCardOptions
     public string DataDirectory { get; set; } = "../../data";
 
     /// <summary>
+    /// Thư mục chứa <c>audit-{yyyyMMdd}.jsonl</c>. Giải đường dẫn theo đúng luật của
+    /// <see cref="DataDirectory"/> — hai luật giải đường dẫn là mầm của hai thư mục lệch nhau.
+    ///
+    /// Thêm 21/09 (T-18). Trước đó là hằng <c>JsonlAuditLogger.DefaultDirectory</c>, không đổi
+    /// được qua cấu hình — mà trên máy chủ, content root không phải <c>Code\src\PartnerCard.Web\</c>
+    /// nên <c>../../logs</c> rơi vào một chỗ tiến trình không ghi được. <c>JsonlAuditLogger</c>
+    /// nuốt lỗi ghi theo thiết kế, nên audit sẽ **mất âm thầm** (SPEC mục 13).
+    /// </summary>
+    public string LogsDirectory { get; set; } = "../../logs";
+
+    /// <summary>
     /// <c>fake</c> hoặc <c>gemini</c> — SPEC mục 4.1. Mặc định <c>fake</c> cố ý: bản clone mới
     /// không có <c>appsettings.Development.json</c> nên cũng không có khoá, và ta muốn người
     /// chấm chạy được ngay thay vì gặp một tiến trình từ chối khởi động.

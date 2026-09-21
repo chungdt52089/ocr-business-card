@@ -28,6 +28,30 @@
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!--
+    Dữ liệu mồi (SPEC mục 19.3). Nguồn duy nhất ở Code\data\, git theo dõi — .gitignore chỉ chặn
+    partners.json, counter.json và images/. Chép sang output để chạy được dù working directory là
+    đâu, và CopyToPublishDirectory để nó đi cùng bản publish: trên máy chủ, đĩa bắt đầu rỗng nên
+    không có file mồi thì trang danh sách trống trơn.
+  -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\..\data\partners.seed.json"
+          Link="seeddata\partners.seed.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    appsettings.Development.json chứa GEMINI_API_KEY. .gitignore chỉ chặn git — nó không chặn
+    publish, và SDK Web mặc định chép mọi appsettings.*.json vào bản publish. Không có dòng này thì
+    khoá nằm trong bản publish, tức trong image đẩy lên máy chủ (SPEC mục 13).
+
+    Chế độ Production không NẠP file đó, nhưng không nạp không có nghĩa là không chép lên.
+  -->
+  <ItemGroup>
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <!-- SPEC mục 1 ghim đúng 2.2.0. Bản này mặc định Stateless — xem BACKLOG T-10. -->
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />

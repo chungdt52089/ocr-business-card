@@ -5,6 +5,7 @@ Chụp danh thiếp → trích xuất bằng Gemini → hồ sơ đối tác chu
 
 **Thư mục này chỉ chứa những gì cần để chạy.** Đặc tả, backlog, kịch bản demo và
 tài liệu thiết kế nằm ngoài repo, tại `..\PartnerCard\docs\` trên máy phát triển.
+Deploy lên Google Cloud Run: xem [`DEPLOY.md`](DEPLOY.md).
 
 ## Chạy
 
