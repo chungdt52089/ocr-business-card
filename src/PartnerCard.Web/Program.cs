@@ -23,7 +23,7 @@ string UnderContentRoot(string path) =>
         : Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, path));
 
 var dataDirectory = UnderContentRoot(options.DataDirectory);
-var logsDirectory = UnderContentRoot(JsonlAuditLogger.DefaultDirectory);
+var logsDirectory = UnderContentRoot(options.LogsDirectory);
 
 builder.Services.AddSingleton(TimeProvider.System);
 
@@ -32,6 +32,19 @@ try
     // Kiểm cấu hình và khoá trước tiên: thiếu khoá ở chế độ gemini thì chết ngay (I-07).
     var secrets = SecretLoader.Load(builder.Configuration, options);
     builder.Services.AddSingleton(secrets);
+
+    // Nạp mồi TRƯỚC LoadFrom, không phải sau (SPEC mục 19.3). Chép file mồi vào thư mục dữ liệu rồi
+    // mới nạp kho, để LoadFrom tính mã tiếp theo bằng max(bộ đếm, mã cao nhất trong kho) và thấy luôn
+    // mã của mồi. Nạp sau thì mã tiếp theo đã chốt từ bộ đếm cũ, và hồ sơ mới đầu tiên đè lên một hồ
+    // sơ mồi mà không báo gì.
+    var seed = PartnerSeed.EnsureSeeded(dataDirectory, PartnerSeed.DefaultSeedPath);
+
+    // Một dòng duy nhất cho log khởi động, và nó đáng giá đúng lúc không ai xem được đĩa máy chủ:
+    // nói luôn có nạp mồi hay không, và hai thư mục ghi ra đĩa nằm ở đâu sau khi giải đường dẫn.
+    // Đường dẫn tương đối tự giải theo thư mục cài đặt là lỗi im lặng hay gặp nhất khi chạy trong
+    // container — JsonlAuditLogger nuốt lỗi ghi theo thiết kế, nên audit mất mà không ai biết.
+    Console.WriteLine(
+        $"{seed.Message} · thư mục dữ liệu: {dataDirectory} · thư mục nhật ký: {logsDirectory}");
 
     // Nạp một lần lúc khởi động. File hỏng thì chết ngay kèm thông báo rõ (S-12).
     builder.Services.AddSingleton<IPartnerStore>(

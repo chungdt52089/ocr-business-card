@@ -1,0 +1,104 @@
+[
+  {
+    "partnerId": "PTN0001",
+    "fullName": "Gwen Okafor",
+    "jobTitle": "Partnership Lead",
+    "company": "Redlake Instruments",
+    "phones": [
+      "+442079460580"
+    ],
+    "emails": [
+      "g.okafor@redlake-instruments.example"
+    ],
+    "website": "https://redlake-instruments.example",
+    "address": "14 Bramley Court, Sheffield S1 2JE",
+    "detectedLanguage": "en",
+    "searchAlias": null,
+    "industry": null,
+    "shortDescription": null,
+    "mainProducts": [],
+    "enrichmentSourceUrl": null,
+    "enrichedAt": null,
+    "sourceImage": "",
+    "imageSha256": "",
+    "fieldConfidence": {},
+    "editedFields": [],
+    "extraction": {
+      "model": "-",
+      "promptVersion": "-",
+      "extractedAt": "2026-09-18T09:12:00+07:00",
+      "latencyMs": 0
+    },
+    "status": "confirmed",
+    "createdAt": "2026-09-18T09:12:00+07:00",
+    "updatedAt": "2026-09-18T09:12:00+07:00"
+  },
+  {
+    "partnerId": "PTN0002",
+    "fullName": "藤井 玲奈",
+    "jobTitle": "海外営業部 課長",
+    "company": "株式会社常磐電子",
+    "phones": [
+      "0335620914"
+    ],
+    "emails": [
+      "r.fujii@tokiwa-denshi.example"
+    ],
+    "website": "https://tokiwa-denshi.example",
+    "address": "東京都港区赤坂 2-11-7",
+    "detectedLanguage": "ja",
+    "searchAlias": "Fujii Rena Tokiwa Denshi Tokyo Minato",
+    "industry": null,
+    "shortDescription": null,
+    "mainProducts": [],
+    "enrichmentSourceUrl": null,
+    "enrichedAt": null,
+    "sourceImage": "",
+    "imageSha256": "",
+    "fieldConfidence": {},
+    "editedFields": [],
+    "extraction": {
+      "model": "-",
+      "promptVersion": "-",
+      "extractedAt": "2026-09-18T09:12:00+07:00",
+      "latencyMs": 0
+    },
+    "status": "confirmed",
+    "createdAt": "2026-09-18T09:14:00+07:00",
+    "updatedAt": "2026-09-18T09:14:00+07:00"
+  },
+  {
+    "partnerId": "PTN0003",
+    "fullName": "Haruki Mori",
+    "jobTitle": "Regional Sales Manager",
+    "company": "Cobalt Bridge 株式会社",
+    "phones": [
+      "0662324471"
+    ],
+    "emails": [
+      "h.mori@cobalt-bridge.example"
+    ],
+    "website": "https://cobalt-bridge.example",
+    "address": "大阪府大阪市北区堂島 1-4-16",
+    "detectedLanguage": "ja",
+    "searchAlias": "Mori Haruki Cobalt Bridge Osaka Kita",
+    "industry": null,
+    "shortDescription": null,
+    "mainProducts": [],
+    "enrichmentSourceUrl": null,
+    "enrichedAt": null,
+    "sourceImage": "",
+    "imageSha256": "",
+    "fieldConfidence": {},
+    "editedFields": [],
+    "extraction": {
+      "model": "-",
+      "promptVersion": "-",
+      "extractedAt": "2026-09-18T09:12:00+07:00",
+      "latencyMs": 0
+    },
+    "status": "confirmed",
+    "createdAt": "2026-09-18T09:16:00+07:00",
+    "updatedAt": "2026-09-18T09:16:00+07:00"
+  }
+]
