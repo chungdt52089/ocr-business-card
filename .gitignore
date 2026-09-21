@@ -15,6 +15,7 @@ data/images/
 data/partners.json
 data/counter.json
 *.tmp.md
+deploy/publish/
 
 # --- Ảnh chụp danh thiếp: xem quy tắc trong CLAUDE.md ---
 # Ảnh chụp phải được thu nhỏ về cạnh dài <= 1600px TRƯỚC khi commit.
