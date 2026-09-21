@@ -99,8 +99,15 @@ builder.Services
 
 var app = builder.Build();
 
-app.UseStaticFiles();
 app.UseAntiforgery();
+
+// MapStaticAssets thay UseStaticFiles: mỗi file trong wwwroot có thêm một URL mang dấu vân tay nội
+// dung (js/capture.<hash>.js), phục vụ kèm Cache-Control immutable. Đổi nội dung là đổi URL, nên
+// trình duyệt không bao giờ chạy capture.js của bản build trước. Với UseStaticFiles, tên file không
+// đổi theo phiên bản: điện thoại đã mở trang giữ bản cũ trong cache, import nạp một module không có
+// init, và circuit hỏng ngay lần render đầu. Danh mục URL đọc từ
+// PartnerCard.Web.staticwebassets.endpoints.json, file đi cùng bản publish.
+app.MapStaticAssets();
 
 // Kiểm tra sống (SPEC mục 13). Mở đường dẫn này bằng điện thoại qua http://<IP-LAN>:5080/health
 // là cách rẻ nhất để biết cả ba thứ đều đúng: bind 0.0.0.0, tường lửa cổng 5080, cùng Wi-Fi.
