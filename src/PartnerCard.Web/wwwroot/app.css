@@ -1,14 +1,291 @@
-/* Kiểu dáng thật thuộc Đợt 4 (T-12 đến T-14). Đây chỉ đủ để trang không trần trụi. */
-body {
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    margin: 2rem;
-    line-height: 1.5;
+/* Scanie — kiểu dáng viết tay, không framework CSS (SPEC mục 1). T-19.
+ *
+ * Ba tầng, theo thứ tự trong file:
+ *   1. Token   — màu, khoảng cách, cỡ chữ. Nền tối CHỈ đổi giá trị token, không viết lại quy tắc nào.
+ *   2. Khung   — header, dải cảnh báo, vùng nội dung (Components/Layout/MainLayout.razor).
+ *   3. Thành phần dùng chung, rồi tới kiểu riêng của từng trang.
+ *
+ * Luật cho T-13/T-14: không đổi tên .waiting, .spinner, .result, .result-error. capture.js tự dựng
+ * những phần tử mang các class đó bằng DOM API (dòng #captureStatus). Đổi tên thì dòng trạng thái mất
+ * kiểu mà không có lỗi nào báo. Muốn đổi diện mạo thì đổi ở đây.
+ *
+ * Điện thoại trước: vùng chạm ≥ var(--tap), không cuộn ngang ở màn hình rộng 375px.
+ */
+
+/* ---- 1. Token ------------------------------------------------------------------------------ */
+
+:root {
+    color-scheme: light dark;
+
+    --bg: #ffffff;
+    --surface: #f4f6f8;
+    --text: #1b1f24;
+    --muted: #57606a;          /* ≥ 4,5:1 trên --bg: dòng "model · promptVersion · ms" dùng màu này */
+    --border: #d0d7de;
+    --link: #14622f;
+    --accent: #14622f;         /* nền nút, mục điều hướng đang chọn */
+    --on-accent: #ffffff;
+    --disabled: #8a8f96;
+    --focus: #1a73e8;
+    --spinner-track: #d0d7de;
+    --spinner-head: #14622f;
+    --danger-bg: #fdecea;
+    --danger-edge: #c0392b;
+    --warn-bg: #fff6e0;
+    --warn-edge: #d9900a;
+    --banner-bg: #fff3cd;
+    --banner-text: #5c4300;
+    --banner-edge: #e0b000;
+
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.5rem;
+
+    --radius: 0.5rem;
+    --radius-sm: 0.25rem;
+    --tap: 44px;               /* vùng chạm tối thiểu cho ngón tay */
+    --content-max: 40rem;
+
+    /* Lề ngang sao cho nội dung header và dải cảnh báo thẳng hàng với .site-main trên màn hình rộng. */
+    --gutter: max(var(--space-4), calc((100% - var(--content-max)) / 2 + var(--space-4)));
 }
 
-/* ---- Trang chụp — T-12 ---------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #121417;
+        --surface: #1b1f24;
+        --text: #e6e8eb;
+        --muted: #a3abb4;
+        --border: #353b42;
+        --link: #5fd28a;
+        --accent: #1f7a3d;     /* chữ trắng trên nền này vẫn ≥ 4,5:1 */
+        --on-accent: #ffffff;
+        --disabled: #4a5058;
+        --focus: #8ab4f8;
+        --spinner-track: #353b42;
+        --spinner-head: #5fd28a;
+        --danger-bg: #3a1c1a;
+        --danger-edge: #e5534b;
+        --warn-bg: #362b10;
+        --warn-edge: #d9a520;
+        --banner-bg: #3a2f0b;
+        --banner-text: #ffe39a;
+        --banner-edge: #b8900f;
+    }
+}
+
+/* ---- Nền ----------------------------------------------------------------------------------- */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: var(--text-base);
+    line-height: 1.5;
+    background: var(--bg);
+    color: var(--text);
+    overflow-wrap: break-word;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Tên file, đường dẫn: chuỗi dài không dấu cách là thứ hay đẩy trang ra ngang nhất. */
+code {
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+}
+
+a {
+    color: var(--link);
+}
+
+h1 {
+    font-size: var(--text-xl);
+    line-height: 1.25;
+    margin: var(--space-5) 0 var(--space-4);
+}
+
+:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+}
+
+/* ---- 2. Khung — MainLayout ----------------------------------------------------------------- */
+
+.site-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-1) var(--gutter);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--link);
+    text-decoration: none;
+}
+
+.site-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+.site-nav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--tap);
+    min-width: var(--tap);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius);
+    color: var(--text);
+    text-decoration: none;
+}
+
+/* NavLink gắn class "active" cho mục khớp URL, kể cả khi layout render tĩnh. */
+.site-nav a.active {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+/* Yêu cầu của bản deploy công khai (BRD mục 4) — phải đọc được ở cả hai nền, không phải trang trí. */
+.demo-banner {
+    margin: 0;
+    padding: var(--space-2) var(--gutter);
+    background: var(--banner-bg);
+    color: var(--banner-text);
+    border-bottom: 2px solid var(--banner-edge);
+    font-size: var(--text-sm);
+}
+
+.site-main {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: 0 var(--space-4) var(--space-6);
+}
+
+/* ---- 3. Thành phần dùng chung — T-13, T-14 dùng lại ----------------------------------------- */
+
+/* Trạng thái chờ. Blazor render nó ("Đang đọc danh thiếp…"), capture.js cũng dựng nó trong
+   #captureStatus ("Đang thu nhỏ ảnh…", "Đang kết nối lại…") — cùng một kiểu cho cả hai. */
+.waiting {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin: var(--space-4) 0;
+    font-size: var(--text-lg);
+}
+
+.spinner {
+    flex: none;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 3px solid var(--spinner-track);
+    border-top-color: var(--spinner-head);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Chậm lại chứ không dừng: vòng quay là tín hiệu "vẫn đang chạy", tắt hẳn thì trông như treo. */
+@media (prefers-reduced-motion: reduce) {
+    .spinner { animation-duration: 2.4s; }
+}
+
+/* Khung thông báo. Tự nó trung tính; thêm .result-error (lỗi) hoặc .result-reject (cảnh báo). */
+.result {
+    margin: var(--space-4) 0;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    border-left: 4px solid var(--border);
+    background: var(--surface);
+}
+
+.result p {
+    margin: 0;
+}
+
+.result p + p {
+    margin-top: var(--space-2);
+}
+
+.result-error {
+    background: var(--danger-bg);
+    border-left-color: var(--danger-edge);
+}
+
+.result-reject {
+    background: var(--warn-bg);
+    border-left-color: var(--warn-edge);
+}
+
+/* Mã lỗi đi ra nguyên vẹn (quota_exhausted khác extract_failed) — nhỏ nhưng phải đọc được. */
+.result-code {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+/* Chữ phụ. Dòng "model · promptVersion · ms" dưới kết quả dùng class này, và đó là cách phân biệt
+   gemini với fake khi demo — nên giữ ≥ --text-sm và ≥ 4,5:1 ở cả hai nền. */
+.muted {
+    color: var(--muted);
+    font-size: var(--text-sm);
+}
+
+/* Bảng trường. minmax(0, 1fr) chứ không 1fr: một email dài không dấu cách không được nong cột ra
+   quá bề ngang màn hình. */
+.fields {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-2) var(--space-4);
+    margin: var(--space-4) 0;
+}
+
+.fields dt {
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.fields dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* ---- Trang chụp — T-12 --------------------------------------------------------------------- */
 
 .capture {
-    margin: 1.5rem 0;
+    margin: var(--space-4) 0 var(--space-5);
 }
 
 /* Ẩn thẻ input thật nhưng KHÔNG dùng display:none — <label for> phải còn mở được app camera.
@@ -22,108 +299,72 @@ body {
 }
 
 .capture-button {
-    display: inline-block;
-    padding: 1rem 1.5rem;
-    font-size: 1.1rem;
-    border-radius: 0.5rem;
-    background: #14622f;
-    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--tap);
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    text-align: center;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--on-accent);
     cursor: pointer;
+    user-select: none;
+}
+
+.capture-button:active {
+    filter: brightness(0.9);
 }
 
 .capture-button.is-busy {
-    background: #8a8a8a;
+    background: var(--disabled);
     cursor: default;
+    filter: none;
+}
+
+/* Nút thật là <label>, input bị ẩn: viền focus phải vẽ lên label khi input nhận focus từ bàn phím. */
+.capture-input:focus-visible + .capture-button {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
 }
 
 .capture-hint {
-    color: #555;
-    font-size: 0.9rem;
+    margin: var(--space-2) 0 0;
+    color: var(--muted);
+    font-size: var(--text-sm);
 }
 
 .capture-preview {
     display: block;
     max-width: 100%;
     height: auto;
-    margin: 1rem 0 0.5rem;
-    border: 1px solid #ccc;
-    border-radius: 0.25rem;
+    margin: var(--space-4) 0 var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
 }
 
 .capture-size {
-    font-size: 0.9rem;
-    color: #333;
+    font-size: var(--text-sm);
 }
 
-.waiting {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin: 1rem 0;
-    font-size: 1.05rem;
-}
+/* ---- Điện thoại ---------------------------------------------------------------------------- */
 
-.spinner {
-    width: 1.1rem;
-    height: 1.1rem;
-    border: 3px solid #ccc;
-    border-top-color: #14622f;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-.result {
-    margin: 1rem 0;
-    padding: 0.8rem 1rem;
-    border-radius: 0.25rem;
-}
-
-.result-error {
-    background: #fdecea;
-    border-left: 4px solid #c0392b;
-}
-
-.result-reject {
-    background: #fff6e0;
-    border-left: 4px solid #d9900a;
-}
-
-.result-code {
-    margin: 0.3rem 0 0;
-    font-size: 0.85rem;
-    color: #666;
-}
-
-.fields {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0.35rem 1rem;
-    margin: 1rem 0;
-}
-
-.fields dt {
-    font-weight: 600;
-    color: #444;
-}
-
-.fields dd {
-    margin: 0;
-    overflow-wrap: anywhere;
-}
-
-.muted {
-    color: #666;
-    font-size: 0.85rem;
-}
-
-/* Điện thoại: bớt lề, và bảng trường xuống một cột cho đỡ vỡ. */
 @media (max-width: 480px) {
-    body { margin: 1rem; }
+    /* Nút chụp chiếm hết bề ngang: mục tiêu lớn nhất trên trang, ngón cái chạm từ đâu cũng trúng. */
+    .capture-button {
+        display: flex;
+        width: 100%;
+    }
 
-    .fields { grid-template-columns: 1fr; gap: 0; }
-    .fields dd { margin-bottom: 0.6rem; }
+    /* Bảng trường xuống một cột cho đỡ vỡ. */
+    .fields {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .fields dd {
+        margin-bottom: var(--space-3);
+    }
 }
