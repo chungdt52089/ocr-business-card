@@ -1,0 +1,65 @@
+@page "/review/{PartnerId}"
+@rendermode InteractiveServer
+@inject IPartnerStore Store
+
+@*
+    Hồ sơ đã lưu, mở lại để xem/sửa — T-13; trang Lịch sử (T-14) bấm thẻ sẽ tới đây.
+
+    Thẻ VỪA CHỤP không đi qua trang này: màn xác nhận của nó nằm ngay ở trang chụp (/), để "Chụp thẻ tiếp"
+    là label của chính #cardFile — trình duyệt mở camera ngay, không cần điều hướng hay JS (luồng SPEC 11.2
+    giữ nguyên). Trang này dùng lại cùng ReviewForm, và nút Lưu vẫn đi qua CardPipeline.SaveAsync.
+
+    Đọc kho trực tiếp là chỉ đọc, cùng loại với tool search_partners — ghi thì chỉ có đường ống.
+*@
+
+<PageTitle>Hồ sơ @PartnerId · Scanie</PageTitle>
+
+<h1>Hồ sơ @PartnerId</h1>
+
+@if (_loading)
+{
+    <div class="waiting" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Đang mở hồ sơ…</span>
+    </div>
+}
+else if (_saved is not null)
+{
+    <SavedNotice Saved="_saved">
+        <a class="button" href="partners">Xem lịch sử</a>
+        <a class="button button-secondary" href="">Chụp thẻ mới</a>
+    </SavedNotice>
+}
+else if (_draft is null)
+{
+    <div class="result result-error">
+        <p>Không tìm thấy hồ sơ @PartnerId.</p>
+        @* SPEC 19.3: trên Cloud Run kho reset về 3 hồ sơ mồi mỗi khi instance được thay. *@
+        <p class="result-code">Trên bản deploy, hồ sơ mất khi máy chủ khởi động lại — chỉ còn 3 hồ sơ mồi.</p>
+    </div>
+    <div class="actions">
+        <a class="button" href="">Về trang chụp</a>
+    </div>
+}
+else
+{
+    <ReviewForm Draft="_draft" OnSaved="saved => _saved = saved" />
+}
+
+@code {
+    [Parameter]
+    public string PartnerId { get; set; } = string.Empty;
+
+    private bool _loading = true;
+    private ReviewDraft? _draft;
+    private SavedPartner? _saved;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _saved = null;
+
+        var partner = await Store.GetAsync(PartnerId, CancellationToken.None);
+        _draft = partner is null ? null : ReviewDraft.FromPartner(partner);
+        _loading = false;
+    }
+}

@@ -276,6 +276,28 @@ public sealed class CardPipelineTests
         stored.Should().HaveCount(1);
     }
 
+    [Fact]
+    public async Task Nhanh_luu_ghi_ban_da_don_nen_email_sai_khong_vao_kho()
+    {
+        using var harness = new Harness();
+
+        // Đúng thứ save_partner nhận được khi agent chép sai: không có form nào kiểm trước.
+        var card = CardBuilder.Valid() with
+        {
+            Emails = ["m.feld@halbrook-logistics.example", "khong-phai-email"],
+        };
+
+        var saved = await harness.Pipeline.SaveAsync(
+            new PartnerDraft(null, card, string.Empty, string.Empty, []), "s1", CancellationToken.None);
+
+        saved.Ok.Should().BeTrue("SG-4 dọn rồi cho đi tiếp, không chặn");
+        saved.Warnings.Should().Contain(w => w.Code == "SG-4" && w.Field == "emails");
+
+        var stored = await harness.Store.GetAsync(saved.PartnerId!, CancellationToken.None);
+        stored!.Emails.Should().Equal(["m.feld@halbrook-logistics.example"],
+            "SPEC mục 7: SG-4 xoá phần tử sai ở cả nhánh lưu — cảnh báo mà vẫn lưu rác là không dọn gì cả");
+    }
+
     // =====================================================================================
     // Số đo của lần gọi — SPEC mục 4.1
     // =====================================================================================

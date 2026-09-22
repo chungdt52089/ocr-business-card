@@ -168,7 +168,18 @@ public sealed class CardPipeline(
                     "Hồ sơ không hợp lệ nên chưa được lưu.", verdict.Warnings);
             }
 
-            var candidate = ToPartner(draft, card);
+            // Lưu bản ĐÃ DỌN, không phải bản trước guard. SG-4…SG-8 xử lý bằng cách xoá về rỗng và ghi
+            // warnings (SPEC mục 7), áp cả ở nhánh này — lưu `card` thì email rác vẫn vào kho, chỉ kèm
+            // một cảnh báo không ai đọc. save_partner không có form nào kiểm trước, nên đây là chốt duy nhất.
+            var cleaned = CardJson.Deserialize(verdict.CleanedJson!);
+            if (cleaned is null)
+            {
+                return new SaveOutcome(
+                    false, null, null, "guard_blocked",
+                    "Hồ sơ không hợp lệ nên chưa được lưu.", verdict.Warnings);
+            }
+
+            var candidate = ToPartner(draft, cleaned);
 
             // ---- Chống trùng (SPEC mục 8 — chỉ so email) -----------------------------
             if (!draft.AllowDuplicate)

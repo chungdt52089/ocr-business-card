@@ -52,7 +52,7 @@
     --radius: 0.5rem;
     --radius-sm: 0.25rem;
     --tap: 44px;               /* vùng chạm tối thiểu cho ngón tay */
-    --content-max: 40rem;
+    --content-max: 60rem;      /* T-13: 40rem không đủ cho hai cột ảnh | trường; T-14 cần lưới 2–3 cột */
 
     /* Lề ngang sao cho nội dung header và dải cảnh báo thẳng hàng với .site-main trên màn hình rộng. */
     --gutter: max(var(--space-4), calc((100% - var(--content-max)) / 2 + var(--space-4)));
@@ -66,9 +66,11 @@
         --muted: #a3abb4;
         --border: #353b42;
         --link: #5fd28a;
-        --accent: #1f7a3d;     /* chữ trắng trên nền này vẫn ≥ 4,5:1 */
-        --on-accent: #ffffff;
-        --disabled: #4a5058;
+        /* Nút SÁNG, chữ TỐI (T-13). Bản T-19 là #1f7a3d + chữ trắng: chữ đạt 5,4:1 nhưng nút so với nền
+           trang chỉ 3,4:1, nên trên Android thật nó ra xanh gần đen. Giờ: chữ 9,7:1, nút so với nền 9,7:1. */
+        --accent: #5fd28a;
+        --on-accent: #121417;
+        --disabled: #7d848c;   /* chữ --on-accent trên nền này 4,9:1 — #4a5058 cũ chỉ còn 2,3:1 với chữ tối */
         --focus: #8ab4f8;
         --spinner-track: #353b42;
         --spinner-head: #5fd28a;
@@ -282,6 +284,66 @@ h1 {
     overflow-wrap: anywhere;
 }
 
+/* Nút dùng chung — T-13. Dùng được trên <button>, <a> và <label for> (nút "Chụp lại" là nhãn của #cardFile).
+   .capture-button giữ kiểu riêng của nó: to hơn, vì đó là mục tiêu chính của trang chụp. */
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--tap);
+    padding: var(--space-2) var(--space-4);
+    font: inherit;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--on-accent);
+    cursor: pointer;
+    user-select: none;
+}
+
+.button:active {
+    filter: brightness(0.9);
+}
+
+.button:disabled {
+    background: var(--disabled);
+    cursor: default;
+    filter: none;
+}
+
+.button-secondary {
+    background: transparent;
+    color: var(--link);
+    border-color: var(--border);
+}
+
+.button-secondary:disabled {
+    background: transparent;
+    color: var(--disabled);
+}
+
+/* Nút vuông một ký tự (× bỏ một dòng) — vẫn đủ vùng chạm. */
+.button-icon {
+    flex: none;
+    width: var(--tap);
+    padding: 0;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+.result-ok {
+    border-left-color: var(--accent);
+}
+
 /* ---- Trang chụp — T-12 --------------------------------------------------------------------- */
 
 .capture {
@@ -338,7 +400,7 @@ h1 {
 
 .capture-preview {
     display: block;
-    max-width: 100%;
+    max-width: min(100%, 32rem);   /* vùng nội dung rộng 60rem từ T-13 — ảnh xem trước không cần to thế */
     height: auto;
     margin: var(--space-4) 0 var(--space-2);
     border: 1px solid var(--border);
@@ -347,6 +409,170 @@ h1 {
 
 .capture-size {
     font-size: var(--text-sm);
+}
+
+/* ---- Màn hình xác nhận — T-13 -------------------------------------------------------------- */
+
+/* Điện thoại trước: một cột, ảnh trên, trường dưới. Hai cột từ 720px (mục @media cuối file). */
+.review {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+    margin: var(--space-4) 0;
+}
+
+.review-image a {
+    display: block;
+}
+
+.review-photo {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+/* Hồ sơ không có ảnh (mồi, lưu qua MCP): ô giữ tỉ lệ danh thiếp 91×55 để bố cục không sụp. */
+.review-photo-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 91 / 55;
+    padding: var(--space-4);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--muted);
+    text-align: center;
+}
+
+/* Dòng model · promptVersion · ms — phải thấy rõ khi demo (gemini hay fake, mô hình đọc hay người gõ). */
+.meta-line {
+    margin: 0 0 var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    font-size: var(--text-sm);
+    color: var(--muted);
+}
+
+.meta-line strong {
+    color: var(--text);
+}
+
+.review-field {
+    margin: 0 0 var(--space-4);
+}
+
+.field-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.field-label {
+    font-weight: 600;
+}
+
+.field-hint {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--muted);
+}
+
+.review-field input,
+.review-field textarea {
+    display: block;
+    width: 100%;
+    min-height: var(--tap);
+    padding: var(--space-2) var(--space-3);
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.review-field textarea {
+    resize: vertical;
+}
+
+/* Confidence dưới 0,9, có giá trị, chưa ai sửa. Trường RỖNG không tô — chỉ có nhãn "chưa có". */
+.field-check input,
+.field-check textarea {
+    background: var(--warn-bg);
+    border: 2px solid var(--warn-edge);
+}
+
+.tag {
+    display: inline-block;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: var(--text-sm);
+    font-weight: 400;
+    color: var(--muted);
+}
+
+.tag-check {
+    background: var(--warn-bg);
+    border-color: var(--warn-edge);
+    color: var(--text);
+}
+
+.tag-edited {
+    border-color: var(--link);
+    color: var(--link);
+}
+
+.list-row {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.list-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+.field-note {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    color: var(--muted);
+}
+
+.field-error {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--danger-edge);
+}
+
+.note-code {
+    white-space: nowrap;
+}
+
+/* Hai cột: ảnh trái để đối chiếu, trường phải (PRD US-03). Ảnh bám theo khi cuộn qua các trường, và
+   không cao quá màn hình — ảnh dọc mà cao hơn khung nhìn thì phần dưới không bao giờ lộ ra. */
+@media (min-width: 720px) {
+    .review {
+        grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+        align-items: start;
+    }
+
+    .review-image {
+        position: sticky;
+        top: var(--space-4);
+    }
+
+    .review-photo {
+        max-height: 80vh;
+        object-fit: contain;
+    }
 }
 
 /* ---- Điện thoại ---------------------------------------------------------------------------- */
@@ -366,5 +592,11 @@ h1 {
 
     .fields dd {
         margin-bottom: var(--space-3);
+    }
+
+    /* Hàng nút xếp dọc, mỗi nút hết bề ngang — "Chụp thẻ tiếp" và "Lưu" chạm bằng ngón cái từ đâu cũng trúng. */
+    .actions {
+        flex-direction: column;
+        align-items: stretch;
     }
 }
