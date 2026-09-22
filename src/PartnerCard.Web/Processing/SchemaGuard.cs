@@ -274,10 +274,12 @@ public sealed class SchemaGuard : ISchemaGuard
         return ChatterValues.Contains(value.Trim(), StringComparer.OrdinalIgnoreCase);
     }
 
-    private static bool IsAcceptableEmail(string value) =>
+    // internal, không private: màn hình xác nhận (ReviewDraft) kiểm ô nhập bằng đúng hai hàm này, để
+    // luật SG-4/SG-5 không có bản chép thứ ba lệch dần với guard (SPEC mục 7 đã phải gỡ một lần lệch).
+    internal static bool IsAcceptableEmail(string value) =>
         Confidence.FormatScoreForEmail(value) == 1.0;
 
-    private static bool IsAcceptablePhone(string value) =>
+    internal static bool IsAcceptablePhone(string value) =>
         value.All(ch => char.IsDigit(ch) || AllowedPhoneChars.Contains(ch));
 
     private static GuardResult Blocked(string code, string reason) =>

@@ -1,0 +1,36 @@
+@*
+    Xác nhận ngắn sau khi lưu — BACKLOG T-13 "Quét liên tiếp": lưu xong KHÔNG đưa về trang trống mà hiện
+    "Đã lưu PTN00xx — Tên, Công ty" kèm nút đi tiếp. Nút do trang chủ quản truyền vào: trang chụp có
+    "Chụp thẻ tiếp" (label của chính #cardFile), trang hồ sơ thì không có ô chọn ảnh nào để trỏ tới.
+*@
+
+<div class="result result-ok" role="status">
+    <p>
+        <strong>Đã lưu <a href="@($"review/{Saved.PartnerId}")">@Saved.PartnerId</a></strong>
+        @if (Who.Length > 0)
+        {
+            <text> — @Who</text>
+        }
+    </p>
+    @if (Saved.Warnings.Count > 0)
+    {
+        <p class="muted">
+            Lưu kèm cảnh báo:
+            @string.Join("; ", Saved.Warnings.Select(w => $"{w.Reason} ({w.Code})"))
+        </p>
+    }
+    <div class="actions">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public SavedPartner Saved { get; set; } = default!;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private string Who =>
+        string.Join(", ", new[] { Saved.FullName, Saved.Company }.Where(s => !string.IsNullOrWhiteSpace(s)));
+}

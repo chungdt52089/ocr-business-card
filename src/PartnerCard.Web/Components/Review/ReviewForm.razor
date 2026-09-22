@@ -1,0 +1,305 @@
+@inject CardPipeline Pipeline
+@inject SessionContext Session
+@inject ImageStore Images
+
+@*
+    Màn hình xác nhận — T-13, PRD US-03. Dùng chung cho thẻ vừa chụp (Capture.razor, trang /) và hồ sơ đã
+    lưu (Review.razor, /review/{id}).
+
+    Nút Lưu gọi ĐÚNG CardPipeline.SaveAsync mà tool save_partner gọi (CLAUDE.md luật cứng 5): chống trùng,
+    guard, audit đều nằm trong đó. Component không inject IPartnerStore — không có nó trong tay thì không
+    có cách nào ghi thẳng vào kho mà bỏ qua đường ống.
+
+    Logic (trường nào đã sửa, tô ô nào, nối Usage) nằm ở ReviewDraft để test được; file này chỉ vẽ.
+*@
+
+<div class="review">
+    <section class="review-image" aria-label="Ảnh danh thiếp">
+        @if (_imageUrl is not null)
+        {
+            @* Mở ảnh cỡ gốc ở tab mới để phóng to (PRD US-03). Đi qua endpoint ảnh chứ không dùng data URI:
+               Chrome chặn mở data URI ở tab mới. *@
+            <a href="@_imageUrl" target="_blank" rel="noopener" title="Mở ảnh cỡ gốc">
+                <img class="review-photo" src="@_imageUrl" alt="Ảnh danh thiếp gốc" />
+            </a>
+            <p class="field-hint">Bấm vào ảnh để mở cỡ gốc.</p>
+        }
+        else
+        {
+            @* Hồ sơ mồi và hồ sơ lưu qua MCP không có ảnh (SPEC 19.3, 10.6); trên Cloud Run ảnh mất khi
+               instance được thay. Ô giữ đúng tỉ lệ danh thiếp để bố cục không sụp. *@
+            <div class="review-photo-empty">
+                <span>
+                    @(string.IsNullOrEmpty(Draft.ImageSha256)
+                        ? "Hồ sơ này không có ảnh gốc"
+                        : "Ảnh gốc không còn trên máy chủ")
+                </span>
+            </div>
+        }
+
+        @ImageFooter
+    </section>
+
+    <section class="review-fields" aria-label="Các trường của danh thiếp">
+        @* Phân biệt gemini với fake khi demo, và hồ sơ mô hình đọc với hồ sơ người tự gõ. *@
+        <p class="meta-line">
+            @if (Draft.Usage.Model == ExtractionUsage.Untracked.Model)
+            {
+                <text>Không qua trích xuất — hồ sơ mồi hoặc nhập tay</text>
+            }
+            else
+            {
+                <text>Trích xuất: <strong>@Draft.Usage.Model</strong> · <strong>@Draft.Usage.PromptVersion</strong>
+                    · <strong>@Draft.Usage.LatencyMs ms</strong></text>
+            }
+        </p>
+
+        @if (Draft.GeneralNotes.Any())
+        {
+            <div class="result result-reject">
+                @foreach (var note in Draft.GeneralNotes)
+                {
+                    <p>@note.Text <span class="note-code">(@note.Code)</span></p>
+                }
+            </div>
+        }
+
+        @(TextField(new(ReviewDraft.FullNameField, "Họ tên", () => Draft.FullName, v => Draft.FullName = v,
+            MaxLength: 100, Live: true)))
+        @(TextField(new(ReviewDraft.JobTitleField, "Chức danh", () => Draft.JobTitle, v => Draft.JobTitle = v)))
+        @(TextField(new(ReviewDraft.CompanyField, "Công ty", () => Draft.Company, v => Draft.Company = v,
+            MaxLength: 200, Live: true)))
+        @(ListField(new(ReviewDraft.PhonesField, "Điện thoại", Draft.Phones, "tel", "+ Thêm số")))
+        @(ListField(new(ReviewDraft.EmailsField, "Email", Draft.Emails, "email", "+ Thêm email")))
+        @(TextField(new(ReviewDraft.WebsiteField, "Website", () => Draft.Website, v => Draft.Website = v,
+            InputType: "url")))
+        @(TextField(new(ReviewDraft.AddressField, "Địa chỉ", () => Draft.Address, v => Draft.Address = v,
+            Multiline: true)))
+        @* Nhãn "gợi ý tìm kiếm" là một trong các ràng buộc giữ searchAlias khỏi thành dữ liệu giả (SPEC 4.4,
+           PRD US-03): nó là chữ Latin để tìm lại thẻ Nhật, không phải tên thật. *@
+        @(TextField(new(ReviewDraft.SearchAliasField, "Gợi ý tìm kiếm", () => Draft.SearchAlias,
+            v => Draft.SearchAlias = v,
+            Hint: "Chữ Latin để tìm lại thẻ tiếng Nhật — không phải tên thật.")))
+        @(TextField(new(ReviewDraft.DetectedLanguageField, "Ngôn ngữ", () => Draft.DetectedLanguage,
+            v => Draft.DetectedLanguage = v)))
+
+        @if (_duplicate is { } duplicate)
+        {
+            @* SPEC mục 8: trùng email thì cảnh báo rồi cho chọn, KHÔNG tự gộp (gộp là F-05). *@
+            <div class="result result-reject" role="alert">
+                <p>
+                    <strong>Email này đã có trong hồ sơ @duplicate.PartnerId</strong>
+                    — @Who(duplicate.FullName, duplicate.Company).
+                </p>
+                <p>Hệ thống không tự gộp hai hồ sơ.</p>
+                <div class="actions">
+                    <button type="button" class="button" disabled="@_saving"
+                            @onclick="() => SaveAsync(allowDuplicate: true)">
+                        Vẫn lưu
+                    </button>
+                    @* Tab mới: điều hướng tại chỗ là mất bản đang sửa. *@
+                    <a class="button button-secondary" href="@($"review/{duplicate.PartnerId}")"
+                       target="_blank" rel="noopener">
+                        Xem @duplicate.PartnerId
+                    </a>
+                    <button type="button" class="button button-secondary" @onclick="() => _duplicate = null">
+                        Sửa tiếp
+                    </button>
+                </div>
+            </div>
+        }
+
+        @if (_error is { } error)
+        {
+            <div class="result result-error" role="alert">
+                <p>@error.Message</p>
+                <p class="result-code">mã lỗi: @error.Code</p>
+            </div>
+        }
+
+        @if (_duplicate is null)
+        {
+            <div class="actions">
+                <button type="button" class="button" disabled="@(_saving || !Draft.CanSave)"
+                        @onclick="() => SaveAsync(allowDuplicate: false)">
+                    @(_saving ? "Đang lưu…" : Draft.IsSavedPartner ? "Lưu thay đổi" : "Lưu")
+                </button>
+                @if (!Draft.HasNameOrCompany)
+                {
+                    <span class="field-error">Cần có họ tên hoặc tên công ty.</span>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ReviewDraft Draft { get; set; } = default!;
+
+    /// <summary>Dưới ảnh — trang chụp đặt nút "Chụp lại" và dòng kích thước ảnh của T-12 ở đây.</summary>
+    [Parameter]
+    public RenderFragment? ImageFooter { get; set; }
+
+    [Parameter]
+    public EventCallback<SavedPartner> OnSaved { get; set; }
+
+    private ReviewDraft? _renderedDraft;
+    private string? _imageUrl;
+    private bool _saving;
+    private Partner? _duplicate;
+    private (string Code, string Message)? _error;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_renderedDraft, Draft))
+        {
+            return;
+        }
+
+        // Bản nháp mới (chụp lại ảnh khác): bỏ mọi trạng thái của lần lưu trước.
+        _renderedDraft = Draft;
+        _saving = false;
+        _duplicate = null;
+        _error = null;
+        _imageUrl = Images.Exists(Draft.ImageSha256) ? ImageEndpoint.UrlFor(Draft.ImageSha256) : null;
+    }
+
+    private async Task SaveAsync(bool allowDuplicate)
+    {
+        // Kiểm lại ở đây chứ không chỉ dựa vào disabled: gõ email sai rồi chạm Lưu ngay thì trình duyệt
+        // gửi 'change' (làm nút tắt) và 'click' (bấm lúc nút còn bật) liền nhau.
+        if (_saving || !Draft.CanSave)
+        {
+            return;
+        }
+
+        _saving = true;
+        _duplicate = null;
+        _error = null;
+
+        try
+        {
+            var outcome = await Pipeline.SaveAsync(
+                Draft.ToPartnerDraft(allowDuplicate), Session.SessionId, CancellationToken.None);
+
+            if (outcome.Ok)
+            {
+                await OnSaved.InvokeAsync(new SavedPartner(
+                    outcome.PartnerId!, Draft.FullName.Trim(), Draft.Company.Trim(), outcome.Warnings));
+                return;
+            }
+
+            if (outcome is { ErrorCode: "duplicate", DuplicateOf: { } existing })
+            {
+                _duplicate = existing;
+                return;
+            }
+
+            // Mã lỗi đi ra nguyên vẹn, như T-12: thông báo trung tính không có nghĩa là giấu nguyên nhân.
+            _error = (outcome.ErrorCode ?? "save_failed", outcome.Message ?? "Không lưu được hồ sơ.");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private string FieldClass(string field) =>
+        Draft.MarkFor(field) == FieldMark.NeedsCheck ? "review-field field-check" : "review-field";
+
+    private static string Who(string fullName, string company) =>
+        string.Join(", ", new[] { fullName, company }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+    /// <summary>Một ô chữ. <paramref name="Live"/>: cập nhật theo từng phím, để nút Lưu bật/tắt ngay.</summary>
+    private sealed record TextSpec(
+        string Field, string Label, Func<string> Get, Action<string> Set,
+        int? MaxLength = null, bool Live = false, bool Multiline = false,
+        string InputType = "text", string? Hint = null)
+    {
+        public string Id => $"rv-{Field}";
+    }
+
+    private sealed record ListSpec(
+        string Field, string Label, List<EditableValue> Items, string InputType, string AddLabel)
+    {
+        public string Id => $"rv-{Field}";
+    }
+
+    private RenderFragment<string> Tag => name => @<text>
+        @switch (Draft.MarkFor(name))
+        {
+            case FieldMark.NeedsCheck:
+                <span class="tag tag-check">cần kiểm</span>
+                break;
+            case FieldMark.Missing:
+                <span class="tag">chưa có</span>
+                break;
+            case FieldMark.Edited:
+                <span class="tag tag-edited">đã sửa</span>
+                break;
+        }
+    </text>;
+
+    private RenderFragment<string> FieldNotes => name => @<text>
+        @foreach (var note in Draft.NotesFor(name))
+        {
+            <p class="field-note">@note.Text <span class="note-code">(@note.Code)</span></p>
+        }
+        @foreach (var problem in Draft.Problems.Where(p => p.Field == name))
+        {
+            <p class="field-error" role="alert">@problem.Text</p>
+        }
+    </text>;
+
+    private RenderFragment<TextSpec> TextField => spec => @<div class="@FieldClass(spec.Field)">
+        <div class="field-head">
+            <label class="field-label" for="@spec.Id">@spec.Label</label>
+            @Tag(spec.Field)
+        </div>
+        @if (spec.Hint is not null)
+        {
+            <p class="field-hint">@spec.Hint</p>
+        }
+        @if (spec.Multiline)
+        {
+            <textarea id="@spec.Id" rows="2" autocomplete="off" value="@spec.Get()"
+                      @onchange="e => spec.Set(e.Value?.ToString() ?? string.Empty)"></textarea>
+        }
+        else if (spec.Live)
+        {
+            <input id="@spec.Id" type="@spec.InputType" autocomplete="off" maxlength="@spec.MaxLength"
+                   value="@spec.Get()" @oninput="e => spec.Set(e.Value?.ToString() ?? string.Empty)" />
+        }
+        else
+        {
+            <input id="@spec.Id" type="@spec.InputType" autocomplete="off" maxlength="@spec.MaxLength"
+                   value="@spec.Get()" @onchange="e => spec.Set(e.Value?.ToString() ?? string.Empty)" />
+        }
+        @FieldNotes(spec.Field)
+    </div>;
+
+    private RenderFragment<ListSpec> ListField => spec => @<div class="@FieldClass(spec.Field)">
+        <div class="field-head">
+            <span class="field-label" id="@($"{spec.Id}-label")">@spec.Label</span>
+            @Tag(spec.Field)
+        </div>
+        @for (var i = 0; i < spec.Items.Count; i++)
+        {
+            var item = spec.Items[i];
+            var number = i + 1;
+            <div class="list-row" @key="item">
+                <input type="@spec.InputType" autocomplete="off" value="@item.Value"
+                       aria-label="@($"{spec.Label} {number}")"
+                       @onchange="e => item.Value = e.Value?.ToString() ?? string.Empty" />
+                <button type="button" class="button button-secondary button-icon"
+                        aria-label="@($"Bỏ {spec.Label.ToLowerInvariant()} {number}")"
+                        @onclick="() => spec.Items.Remove(item)">×</button>
+            </div>
+        }
+        <button type="button" class="button button-secondary" @onclick="() => spec.Items.Add(new EditableValue())">
+            @spec.AddLabel
+        </button>
+        @FieldNotes(spec.Field)
+    </div>;
+}

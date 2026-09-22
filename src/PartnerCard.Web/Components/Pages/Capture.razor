@@ -7,20 +7,27 @@
 @inject IJSRuntime JS
 
 @*
-    Trang chụp — T-12, SPEC mục 11.
+    Trang chụp — T-12, SPEC mục 11. Từ T-13 cũng là màn hình xác nhận của thẻ vừa chụp.
 
     Gọi ĐÚNG CardPipeline mà tool MCP gọi (CLAUDE.md luật cứng 5). Không inject IExtractor, không
     gọi IAuditLogger: đường ống đã ghi audit, y như tầng tool không ghi. Giao diện có đường đi
     riêng thì mọi bảo đảm của đường ống đều vô nghĩa.
 
-    Trang dừng ở kết quả CHỈ ĐỌC. Sửa trường, tô trường dưới 0,9 và nút Lưu là T-13 (/review).
+    Vì sao xác nhận nằm NGAY Ở ĐÂY chứ không sang trang /review: "Chụp thẻ tiếp" phải mở camera ngay
+    (BACKLOG T-13), và cách duy nhất không cần JS, không mất user activation (iOS Safari đòi click đồng
+    bộ) là một <label for="cardFile"> trỏ vào chính thẻ input của trang này. Ở trang khác thì phải điều
+    hướng về đây rồi click() bằng JS. Ở lại cùng trang cũng giữ nguyên luồng Ping/OnShrunkAsync của SPEC
+    11.2 — không một dòng nào của nó đổi.
 *@
 
-<PageTitle>Chụp danh thiếp · Scanie</PageTitle>
+<PageTitle>@PageName · Scanie</PageTitle>
 
-<h1>Chụp danh thiếp</h1>
+<h1>@PageName</h1>
 
-<div class="capture">
+@* Thẻ input nằm NGOÀI mọi @if và luôn ở đầu trang: capture.js gắn listener vào đúng phần tử này ở
+   init(). Nếu nó nằm trong khối điều kiện thì Blazor có thể dựng lại phần tử và listener mất theo. Các
+   nhãn trỏ vào nó ("Chụp lại", "Chụp thẻ tiếp") thì đặt ở đâu cũng được. *@
+<div class="@(ShowCaptureButton ? "capture" : null)">
     @* Thẻ input THÔ, không dùng <InputFile>: thẻ đó stream nguyên file 12MP lên server qua
        SignalR, tức làm đúng cái việc mà bước thu nhỏ ở capture.js sinh ra để tránh.
 
@@ -29,12 +36,15 @@
        phía trình duyệt (init), thu nhỏ, rồi gọi OnShrunkAsync khi server nghe được. *@
     <input id="cardFile" type="file" accept="image/*" capture="environment"
            class="capture-input" @ref="_fileInput" disabled="@Busy" />
-    <label class="@(Busy ? "capture-button is-busy" : "capture-button")" for="cardFile">
-        Chụp hoặc chọn ảnh danh thiếp
-    </label>
-    <p class="capture-hint">
-        Điện thoại mở app camera gốc. Máy tính hiện hộp chọn file.
-    </p>
+    @if (ShowCaptureButton)
+    {
+        <label class="@(Busy ? "capture-button is-busy" : "capture-button")" for="cardFile">
+            Chụp hoặc chọn ảnh danh thiếp
+        </label>
+        <p class="capture-hint">
+            Điện thoại mở app camera gốc. Máy tính hiện hộp chọn file.
+        </p>
+    }
 </div>
 
 @* Dòng trạng thái của capture.js — "Đang thu nhỏ ảnh…", "Đang kết nối lại…", lỗi hết 30 giây.
@@ -69,26 +79,14 @@
     </div>
 }
 
-@if (_preview is not null)
+@if (_preview is not null && _draft is null)
 {
-    @* Ảnh xem trước lấy từ chuỗi base64 đang nằm trong bộ nhớ, KHÔNG đọc đĩa. Endpoint phục vụ
-       ảnh từ data/images/ thuộc T-13, lúc /review cần nó — và nó phải là endpoint riêng có kiểm
-       đường dẫn, không bao giờ là UseStaticFiles trỏ vào data/ (SPEC mục 11.3). *@
+    @* Ảnh xem trước lấy từ chuỗi base64 đang nằm trong bộ nhớ, KHÔNG đọc đĩa — lúc đang đọc thẻ,
+       hoặc khi ảnh hoá ra không phải danh thiếp (loại ảnh này không được ghi xuống đĩa). Màn xác
+       nhận thì lấy ảnh qua endpoint có kiểm đường dẫn (SPEC mục 11.3), để bấm vào mở được cỡ gốc. *@
     <img class="capture-preview" src="@_preview" alt="Ảnh danh thiếp vừa chụp" />
 
-    @* In CẢ HAI con số. Chuỗi base64 dài hơn byte JPEG 1,333 lần, và chính chuỗi đó mới là thứ
-       đi qua SignalR: 1,5 MB JPEG = 2,0 MB base64 = đúng bằng trần. Chỉ in byte giải mã thì
-       người đọc thấy "1,4 MB, đạt" trong khi payload thật sát trần tới mức đứt kết nối — mà lỗi
-       ấy trông y hệt treo máy. *@
-    <p class="capture-size">
-        Ảnh gửi lên: <strong>@Size(_jpegBytes) JPEG</strong> (ngưỡng T-12: 1,5 MB)
-        · <strong>@Size(_base64Bytes) qua SignalR</strong> (trần: 2 MB)
-        · @_width×@_height
-        @* Tên file gửi lên dưới dạng sourceName. Hiện nó ra vì ở chế độ fake, đây là KHOÁ TRA
-           expected.json: điện thoại đặt tên mọi ảnh là image.jpg nên không khớp mã thẻ nào, và
-           không thấy dòng này thì kết quả "không phải danh thiếp" trông như một lỗi. *@
-        · tên file: <code>@Show(_sourceImage ?? string.Empty)</code>
-    </p>
+    @CaptureSize
 }
 
 @if (_phase == Phase.Done && _outcome is { } outcome)
@@ -110,34 +108,30 @@
             <p>@rejected.RejectReason</p>
         </div>
     }
-    else if (outcome.Card is { } card)
-    {
-        <dl class="fields">
-            <dt>Họ tên</dt><dd>@Show(card.FullName)</dd>
-            <dt>Chức danh</dt><dd>@Show(card.JobTitle)</dd>
-            <dt>Công ty</dt><dd>@Show(card.Company)</dd>
-            <dt>Điện thoại</dt><dd>@Show(string.Join(" · ", card.Phones))</dd>
-            <dt>Email</dt><dd>@Show(string.Join(" · ", card.Emails))</dd>
-            <dt>Website</dt><dd>@Show(card.Website)</dd>
-            <dt>Địa chỉ</dt><dd>@Show(card.Address)</dd>
-            <dt>Ngôn ngữ</dt><dd>@Show(card.DetectedLanguage)</dd>
-            @* Nhãn "gợi ý tìm kiếm" là một trong ba ràng buộc giữ searchAlias khỏi thành dữ liệu
-               giả (SPEC mục 4.4). Nó không phải trường tên. *@
-            <dt>Gợi ý tìm kiếm</dt><dd>@Show(card.SearchAlias)</dd>
-        </dl>
+}
 
-        <p class="muted">
-            @_usage.Model · @_usage.PromptVersion · @_usage.LatencyMs ms
-            @if (_imageSha256 is not null)
-            {
-                <text> · đã lưu data/images/@(_imageSha256[..8])….jpg</text>
-            }
-        </p>
+@if (_draft is not null)
+{
+    <ReviewForm Draft="_draft" OnSaved="OnSaved">
+        <ImageFooter>
+            @CaptureSize
+            <div class="actions">
+                @* Cùng #cardFile, cùng capture.js — không có luồng chụp thứ hai. Ảnh mới thay bản đang sửa. *@
+                <label class="button button-secondary" for="cardFile">Chụp lại</label>
+            </div>
+        </ImageFooter>
+    </ReviewForm>
+}
 
-        <p class="muted">
-            Chỉ đọc. Sửa trường, tô trường có độ tin cậy dưới 0,9 và nút Lưu là T-13 (<code>/review</code>).
-        </p>
-    }
+@if (_saved is not null)
+{
+    @* Quét liên tiếp (BACKLOG T-13, thêm 22/09): lưu xong không về trang trống. "Chụp thẻ tiếp" là
+       label của #cardFile nên trình duyệt mở camera ngay trong chính cú chạm, rồi mọi thứ đi đúng luồng
+       JS của SPEC 11.2: OnShrunkAsync thấy trang không bận → nhận ảnh → Reset(). *@
+    <SavedNotice Saved="_saved">
+        <label class="capture-button" for="cardFile">Chụp thẻ tiếp</label>
+        <a class="button button-secondary" href="partners">Xem lịch sử</a>
+    </SavedNotice>
 }
 
 @code {
@@ -148,7 +142,8 @@
     private const string JpegMime = "image/jpeg";
 
     // Không còn bước Shrinking ở đây: thu nhỏ xảy ra trong trình duyệt, trước khi server biết có ảnh.
-    private enum Phase { Idle, Extracting, Done }
+    // Done = đã đọc xong (lỗi, không phải thẻ, hoặc đang ở màn xác nhận); Saved = vừa lưu, chờ thẻ tiếp.
+    private enum Phase { Idle, Extracting, Done, Saved }
 
     private ElementReference _fileInput;
     private IJSObjectReference? _module;
@@ -172,19 +167,40 @@
 
     private ExtractOutcome? _outcome;
 
-    // Ba giá trị T-13 cần để dựng PartnerDraft lúc bấm Lưu (SPEC mục 4.1 và 10.6). Nhánh lưu
-    // KHÔNG trích xuất nên tự nó không với tới được cái nào — chúng phải đi vòng qua đây.
-    //
-    // T-12 giữ chúng trong chính component này, chưa dựng chỗ chứa dùng chung: /review chưa tồn
-    // tại, nên một service scoped bây giờ là plumbing không ai dùng. T-13 nhấc ba dòng này ra.
-    // _sourceImage có ngay sau khi thu nhỏ, kể cả khi ảnh hoá ra không phải danh thiếp — nó là
-    // tên file, không phải một lời hứa về nội dung. _imageSha256 chỉ có khi đã ghi được ảnh
-    // xuống đĩa, nên null ở đây nghĩa là chưa có gì để T-13 lưu.
-    private string? _sourceImage;  // tên file gốc  → PartnerDraft.SourceImage
-    private string? _imageSha256;  // mã băm        → PartnerDraft.ImageSha256, và là tên file trên đĩa
-    private ExtractionUsage _usage = ExtractionUsage.Untracked;  // → PartnerDraft.Usage
+    // Tên file gốc — có ngay sau khi thu nhỏ, kể cả khi ảnh hoá ra không phải danh thiếp: nó là tên
+    // file, không phải một lời hứa về nội dung.
+    private string? _sourceImage;
+
+    // Màn xác nhận. Ba giá trị nhánh lưu không tự với tới được (SPEC mục 4.1 và 10.6) — tên file gốc,
+    // mã băm ảnh, và ExtractOutcome.Usage — đi vào đây lúc trích xuất xong, rồi ra PartnerDraft khi
+    // bấm Lưu. Không có service scoped giữ nháp: màn xác nhận ở ngay trang này.
+    private ReviewDraft? _draft;
+    private SavedPartner? _saved;
 
     private bool Busy => _phase is Phase.Extracting;
+
+    private string PageName => _draft is null ? "Chụp danh thiếp" : "Xác nhận danh thiếp";
+
+    // Nút chụp lớn chỉ hiện khi chưa có gì để xác nhận: ở màn xác nhận có "Chụp lại" dưới ảnh, và sau
+    // khi lưu có "Chụp thẻ tiếp" — cùng trỏ vào #cardFile.
+    private bool ShowCaptureButton => _draft is null && _saved is null;
+
+    /// <summary>
+    /// In CẢ HAI con số. Chuỗi base64 dài hơn byte JPEG 1,333 lần, và chính chuỗi đó mới là thứ đi
+    /// qua SignalR: 1,5 MB JPEG = 2,0 MB base64 = đúng bằng trần. Chỉ in byte giải mã thì người đọc
+    /// thấy "1,4 MB, đạt" trong khi payload thật sát trần tới mức đứt kết nối — mà lỗi ấy trông y hệt
+    /// treo máy.
+    ///
+    /// Tên file là sourceName. Hiện nó ra vì ở chế độ fake, đây là KHOÁ TRA expected.json: điện thoại
+    /// đặt tên mọi ảnh là image.jpg nên không khớp mã thẻ nào, và không thấy dòng này thì kết quả
+    /// "không phải danh thiếp" trông như một lỗi.
+    /// </summary>
+    private RenderFragment CaptureSize => @<p class="capture-size">
+        Ảnh gửi lên: <strong>@Size(_jpegBytes) JPEG</strong> (ngưỡng T-12: 1,5 MB)
+        · <strong>@Size(_base64Bytes) qua SignalR</strong> (trần: 2 MB)
+        · @_width×@_height
+        · tên file: <code>@Show(_sourceImage ?? string.Empty)</code>
+    </p>;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -308,11 +324,27 @@
         {
             StopTicker();
             _outcome = outcome;
-            _usage = outcome.Usage;
-            _imageSha256 = imageSha256;
+
+            // imageSha256 chỉ có khi đã là danh thiếp và ảnh đã xuống đĩa — đúng điều kiện có gì để lưu.
+            if (imageSha256 is not null)
+            {
+                _draft = ReviewDraft.FromOutcome(outcome, _sourceImage ?? string.Empty, imageSha256);
+            }
+
             _phase = Phase.Done;
             StateHasChanged();
         });
+    }
+
+    /// <summary>
+    /// Lưu xong (ReviewForm đã đi qua <c>Pipeline.SaveAsync</c>): thay màn xác nhận bằng dòng "Đã lưu".
+    /// Không phải Busy, nên ảnh kế tiếp từ "Chụp thẻ tiếp" được <see cref="OnShrunkAsync"/> nhận ngay.
+    /// </summary>
+    private void OnSaved(SavedPartner saved)
+    {
+        Reset();
+        _saved = saved;
+        _phase = Phase.Saved;
     }
 
     private void Reset()
@@ -323,8 +355,8 @@
         _jpegBytes = _base64Bytes = 0;
         _outcome = null;
         _sourceImage = null;
-        _imageSha256 = null;
-        _usage = ExtractionUsage.Untracked;
+        _draft = null;
+        _saved = null;
     }
 
     private void StartTicker()

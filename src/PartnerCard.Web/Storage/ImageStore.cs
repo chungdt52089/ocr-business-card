@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 
 namespace PartnerCard.Web.Storage;
 
@@ -16,11 +17,36 @@ namespace PartnerCard.Web.Storage;
 /// Đường ống **không** gọi class này: nhánh trích xuất không persist gì (SPEC mục 2), và nhánh lưu
 /// nhận sẵn mã băm trong <c>PartnerDraft</c>. Chỗ gọi là tầng giao diện, nơi có byte ảnh trong tay.
 /// </summary>
-public sealed class ImageStore(string dataDirectory)
+public sealed partial class ImageStore(string dataDirectory)
 {
     public const string FolderName = "images";
 
     public string FolderPath => Path.Combine(dataDirectory, FolderName);
+
+    /// <summary>
+    /// Đường dẫn trên đĩa của một ảnh đã lưu, hoặc <c>null</c>. Đây là chốt kiểm đường dẫn của endpoint
+    /// ảnh (SPEC mục 11.3): **chỉ nhận đúng dạng <see cref="SaveAsync"/> ghi ra** — 64 ký tự hex thường
+    /// cộng <c>.jpg</c>. Không cố "làm sạch" tên lạ: <c>../partners.json</c>, tên viết HOA, đuôi khác hay
+    /// một file tự đặt vào <c>images/</c> đều trả <c>null</c> như nhau.
+    /// </summary>
+    public string? PathOf(string? fileName)
+    {
+        if (fileName is null || !FileNamePattern().IsMatch(fileName))
+        {
+            return null;
+        }
+
+        var path = Path.Combine(FolderPath, fileName);
+
+        return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>
+    /// Ảnh của mã băm này còn trên đĩa không. Hồ sơ mồi và hồ sơ lưu qua MCP có mã băm rỗng; trên
+    /// Cloud Run ảnh mất khi instance được thay (SPEC 19.3) — màn hình xác nhận hiện ô trống thay vì ảnh vỡ.
+    /// </summary>
+    public bool Exists(string? imageSha256) =>
+        !string.IsNullOrEmpty(imageSha256) && PathOf($"{imageSha256}.jpg") is not null;
 
     /// <summary>
     /// Ghi ảnh đã thu nhỏ, trả SHA-256 của nó — vừa là danh tính nội dung, vừa là tên file trên đĩa.
@@ -51,4 +77,8 @@ public sealed class ImageStore(string dataDirectory)
 
         return sha;
     }
+
+    // \z chứ không $: $ của .NET còn khớp trước một ký tự xuống dòng ở cuối chuỗi.
+    [GeneratedRegex(@"^[0-9a-f]{64}\.jpg\z")]
+    private static partial Regex FileNamePattern();
 }
