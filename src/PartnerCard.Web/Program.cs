@@ -118,6 +118,10 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 // Endpoint riêng có kiểm tên file, KHÔNG phải UseStaticFiles trỏ vào data/: thư mục đó còn chứa kho.
 app.MapGet(ImageEndpoint.Route, ImageEndpoint.Serve);
 
+// Xuất CSV cho trang Lịch sử (T-14, PRD US-06). REST thường, KHÔNG phải tool MCP — SPEC 10.4 không cho tool
+// xuất file.
+app.MapGet(CsvExportEndpoint.Route, CsvExportEndpoint.ServeAsync);
+
 // Phải khớp SessionContext.McpPath — chỉ lời gọi dưới đường dẫn này mới bị cảnh báo khi thiếu X-Session-Id.
 app.MapMcp("/mcp");
 

@@ -4,10 +4,11 @@ namespace PartnerCard.Web.Models;
 /// Tiêu chí tìm kiếm — SPEC mục 3.3, hình dạng lấy từ PRD mục 2 (<c>search_partners</c>).
 /// </summary>
 /// <param name="Keyword">
-/// Từ khoá. Ở T-02 mới khớp chuỗi con không phân biệt hoa thường; tìm đủ sáu trường
-/// và tìm không dấu thuộc T-14, vì cả hai cần <c>Normalizer</c> của T-05.
+/// Từ khoá, khớp chuỗi con trên sáu trường của PRD US-06 (<c>fullName</c>, <c>company</c>, <c>emails</c>,
+/// <c>searchAlias</c>, <c>jobTitle</c>, <c>address</c>). Hai phía cùng qua <c>TextKeys.NameKey</c>: không phân
+/// biệt hoa thường, gõ không dấu vẫn khớp có dấu (T-14).
 /// </param>
-/// <param name="Company">Lọc thêm theo tên công ty.</param>
+/// <param name="Company">Lọc thêm theo tên công ty, cùng luật so với <paramref name="Keyword"/>.</param>
 /// <param name="Take">Số bản ghi tối đa. Xem <see cref="QueryLimits"/>.</param>
 public sealed record PartnerQuery(
     string? Keyword = null,
