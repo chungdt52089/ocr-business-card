@@ -1,14 +1,353 @@
-/* Kiểu dáng thật thuộc Đợt 4 (T-12 đến T-14). Đây chỉ đủ để trang không trần trụi. */
-body {
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    margin: 2rem;
-    line-height: 1.5;
+/* Scanie — kiểu dáng viết tay, không framework CSS (SPEC mục 1). T-19.
+ *
+ * Ba tầng, theo thứ tự trong file:
+ *   1. Token   — màu, khoảng cách, cỡ chữ. Nền tối CHỈ đổi giá trị token, không viết lại quy tắc nào.
+ *   2. Khung   — header, dải cảnh báo, vùng nội dung (Components/Layout/MainLayout.razor).
+ *   3. Thành phần dùng chung, rồi tới kiểu riêng của từng trang.
+ *
+ * Luật cho T-13/T-14: không đổi tên .waiting, .spinner, .result, .result-error. capture.js tự dựng
+ * những phần tử mang các class đó bằng DOM API (dòng #captureStatus). Đổi tên thì dòng trạng thái mất
+ * kiểu mà không có lỗi nào báo. Muốn đổi diện mạo thì đổi ở đây.
+ *
+ * Điện thoại trước: vùng chạm ≥ var(--tap), không cuộn ngang ở màn hình rộng 375px.
+ */
+
+/* ---- 1. Token ------------------------------------------------------------------------------ */
+
+:root {
+    color-scheme: light dark;
+
+    --bg: #ffffff;
+    --surface: #f4f6f8;
+    --text: #1b1f24;
+    --muted: #57606a;          /* ≥ 4,5:1 trên --bg: dòng "model · promptVersion · ms" dùng màu này */
+    --border: #d0d7de;
+    --link: #14622f;
+    --accent: #14622f;         /* nền nút, mục điều hướng đang chọn */
+    --on-accent: #ffffff;
+    --disabled: #8a8f96;
+    --focus: #1a73e8;
+    --spinner-track: #d0d7de;
+    --spinner-head: #14622f;
+    --danger-bg: #fdecea;
+    --danger-edge: #c0392b;
+    --warn-bg: #fff6e0;
+    --warn-edge: #d9900a;
+    --banner-bg: #fff3cd;
+    --banner-text: #5c4300;
+    --banner-edge: #e0b000;
+
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.5rem;
+
+    --radius: 0.5rem;
+    --radius-sm: 0.25rem;
+    --tap: 44px;               /* vùng chạm tối thiểu cho ngón tay */
+    --content-max: 60rem;      /* T-13: 40rem không đủ cho hai cột ảnh | trường; T-14 cần lưới 2–3 cột */
+
+    /* Lề ngang sao cho nội dung header và dải cảnh báo thẳng hàng với .site-main trên màn hình rộng. */
+    --gutter: max(var(--space-4), calc((100% - var(--content-max)) / 2 + var(--space-4)));
 }
 
-/* ---- Trang chụp — T-12 ---------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #121417;
+        --surface: #1b1f24;
+        --text: #e6e8eb;
+        --muted: #a3abb4;
+        --border: #353b42;
+        --link: #5fd28a;
+        /* Nút SÁNG, chữ TỐI (T-13). Bản T-19 là #1f7a3d + chữ trắng: chữ đạt 5,4:1 nhưng nút so với nền
+           trang chỉ 3,4:1, nên trên Android thật nó ra xanh gần đen. Giờ: chữ 9,7:1, nút so với nền 9,7:1. */
+        --accent: #5fd28a;
+        --on-accent: #121417;
+        --disabled: #7d848c;   /* chữ --on-accent trên nền này 4,9:1 — #4a5058 cũ chỉ còn 2,3:1 với chữ tối */
+        --focus: #8ab4f8;
+        --spinner-track: #353b42;
+        --spinner-head: #5fd28a;
+        --danger-bg: #3a1c1a;
+        --danger-edge: #e5534b;
+        --warn-bg: #362b10;
+        --warn-edge: #d9a520;
+        --banner-bg: #3a2f0b;
+        --banner-text: #ffe39a;
+        --banner-edge: #b8900f;
+    }
+}
+
+/* ---- Nền ----------------------------------------------------------------------------------- */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: var(--text-base);
+    line-height: 1.5;
+    background: var(--bg);
+    color: var(--text);
+    overflow-wrap: break-word;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Tên file, đường dẫn: chuỗi dài không dấu cách là thứ hay đẩy trang ra ngang nhất. */
+code {
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+}
+
+a {
+    color: var(--link);
+}
+
+h1 {
+    font-size: var(--text-xl);
+    line-height: 1.25;
+    margin: var(--space-5) 0 var(--space-4);
+}
+
+:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+}
+
+/* ---- 2. Khung — MainLayout ----------------------------------------------------------------- */
+
+.site-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-1) var(--gutter);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--link);
+    text-decoration: none;
+}
+
+.site-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+.site-nav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--tap);
+    min-width: var(--tap);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius);
+    color: var(--text);
+    text-decoration: none;
+}
+
+/* NavLink gắn class "active" cho mục khớp URL, kể cả khi layout render tĩnh. */
+.site-nav a.active {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+/* Yêu cầu của bản deploy công khai (BRD mục 4) — phải đọc được ở cả hai nền, không phải trang trí. */
+.demo-banner {
+    margin: 0;
+    padding: var(--space-2) var(--gutter);
+    background: var(--banner-bg);
+    color: var(--banner-text);
+    border-bottom: 2px solid var(--banner-edge);
+    font-size: var(--text-sm);
+}
+
+.site-main {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: 0 var(--space-4) var(--space-6);
+}
+
+/* ---- 3. Thành phần dùng chung — T-13, T-14 dùng lại ----------------------------------------- */
+
+/* Trạng thái chờ. Blazor render nó ("Đang đọc danh thiếp…"), capture.js cũng dựng nó trong
+   #captureStatus ("Đang thu nhỏ ảnh…", "Đang kết nối lại…") — cùng một kiểu cho cả hai. */
+.waiting {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin: var(--space-4) 0;
+    font-size: var(--text-lg);
+}
+
+.spinner {
+    flex: none;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 3px solid var(--spinner-track);
+    border-top-color: var(--spinner-head);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Chậm lại chứ không dừng: vòng quay là tín hiệu "vẫn đang chạy", tắt hẳn thì trông như treo. */
+@media (prefers-reduced-motion: reduce) {
+    .spinner { animation-duration: 2.4s; }
+}
+
+/* Khung thông báo. Tự nó trung tính; thêm .result-error (lỗi) hoặc .result-reject (cảnh báo). */
+.result {
+    margin: var(--space-4) 0;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    border-left: 4px solid var(--border);
+    background: var(--surface);
+}
+
+.result p {
+    margin: 0;
+}
+
+.result p + p {
+    margin-top: var(--space-2);
+}
+
+.result-error {
+    background: var(--danger-bg);
+    border-left-color: var(--danger-edge);
+}
+
+.result-reject {
+    background: var(--warn-bg);
+    border-left-color: var(--warn-edge);
+}
+
+/* Mã lỗi đi ra nguyên vẹn (quota_exhausted khác extract_failed) — nhỏ nhưng phải đọc được. */
+.result-code {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+/* Chữ phụ. Dòng "model · promptVersion · ms" dưới kết quả dùng class này, và đó là cách phân biệt
+   gemini với fake khi demo — nên giữ ≥ --text-sm và ≥ 4,5:1 ở cả hai nền. */
+.muted {
+    color: var(--muted);
+    font-size: var(--text-sm);
+}
+
+/* Bảng trường. minmax(0, 1fr) chứ không 1fr: một email dài không dấu cách không được nong cột ra
+   quá bề ngang màn hình. */
+.fields {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-2) var(--space-4);
+    margin: var(--space-4) 0;
+}
+
+.fields dt {
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.fields dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Nút dùng chung — T-13. Dùng được trên <button>, <a> và <label for> (nút "Chụp lại" là nhãn của #cardFile).
+   .capture-button giữ kiểu riêng của nó: to hơn, vì đó là mục tiêu chính của trang chụp. */
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--tap);
+    padding: var(--space-2) var(--space-4);
+    font: inherit;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--on-accent);
+    cursor: pointer;
+    user-select: none;
+}
+
+.button:active {
+    filter: brightness(0.9);
+}
+
+.button:disabled {
+    background: var(--disabled);
+    cursor: default;
+    filter: none;
+}
+
+.button-secondary {
+    background: transparent;
+    color: var(--link);
+    border-color: var(--border);
+}
+
+.button-secondary:disabled {
+    background: transparent;
+    color: var(--disabled);
+}
+
+/* Nút vuông một ký tự (× bỏ một dòng) — vẫn đủ vùng chạm. */
+.button-icon {
+    flex: none;
+    width: var(--tap);
+    padding: 0;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+.result-ok {
+    border-left-color: var(--accent);
+}
+
+/* ---- Trang chụp — T-12 --------------------------------------------------------------------- */
 
 .capture {
-    margin: 1.5rem 0;
+    margin: var(--space-4) 0 var(--space-5);
 }
 
 /* Ẩn thẻ input thật nhưng KHÔNG dùng display:none — <label for> phải còn mở được app camera.
@@ -22,108 +361,358 @@ body {
 }
 
 .capture-button {
-    display: inline-block;
-    padding: 1rem 1.5rem;
-    font-size: 1.1rem;
-    border-radius: 0.5rem;
-    background: #14622f;
-    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--tap);
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    text-align: center;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--on-accent);
     cursor: pointer;
+    user-select: none;
+}
+
+.capture-button:active {
+    filter: brightness(0.9);
 }
 
 .capture-button.is-busy {
-    background: #8a8a8a;
+    background: var(--disabled);
     cursor: default;
+    filter: none;
+}
+
+/* Nút thật là <label>, input bị ẩn: viền focus phải vẽ lên label khi input nhận focus từ bàn phím. */
+.capture-input:focus-visible + .capture-button {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
 }
 
 .capture-hint {
-    color: #555;
-    font-size: 0.9rem;
+    margin: var(--space-2) 0 0;
+    color: var(--muted);
+    font-size: var(--text-sm);
 }
 
 .capture-preview {
     display: block;
-    max-width: 100%;
+    max-width: min(100%, 32rem);   /* vùng nội dung rộng 60rem từ T-13 — ảnh xem trước không cần to thế */
     height: auto;
-    margin: 1rem 0 0.5rem;
-    border: 1px solid #ccc;
-    border-radius: 0.25rem;
+    margin: var(--space-4) 0 var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
 }
 
 .capture-size {
-    font-size: 0.9rem;
-    color: #333;
+    font-size: var(--text-sm);
 }
 
-.waiting {
+/* ---- Màn hình xác nhận — T-13 -------------------------------------------------------------- */
+
+/* Điện thoại trước: một cột, ảnh trên, trường dưới. Hai cột từ 720px (mục @media cuối file). */
+.review {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+    margin: var(--space-4) 0;
+}
+
+.review-image a {
+    display: block;
+}
+
+.review-photo {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+/* Hồ sơ không có ảnh (mồi, lưu qua MCP): ô giữ tỉ lệ danh thiếp 91×55 để bố cục không sụp. */
+.review-photo-empty {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    margin: 1rem 0;
-    font-size: 1.05rem;
+    justify-content: center;
+    aspect-ratio: 91 / 55;
+    padding: var(--space-4);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--muted);
+    text-align: center;
 }
 
-.spinner {
-    width: 1.1rem;
-    height: 1.1rem;
-    border: 3px solid #ccc;
-    border-top-color: #14622f;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+/* Dòng model · promptVersion · ms — phải thấy rõ khi demo (gemini hay fake, mô hình đọc hay người gõ). */
+.meta-line {
+    margin: 0 0 var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    font-size: var(--text-sm);
+    color: var(--muted);
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
+.meta-line strong {
+    color: var(--text);
 }
 
-.result {
-    margin: 1rem 0;
-    padding: 0.8rem 1rem;
-    border-radius: 0.25rem;
+.review-field {
+    margin: 0 0 var(--space-4);
 }
 
-.result-error {
-    background: #fdecea;
-    border-left: 4px solid #c0392b;
+.field-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-2);
+    margin-bottom: var(--space-1);
 }
 
-.result-reject {
-    background: #fff6e0;
-    border-left: 4px solid #d9900a;
-}
-
-.result-code {
-    margin: 0.3rem 0 0;
-    font-size: 0.85rem;
-    color: #666;
-}
-
-.fields {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0.35rem 1rem;
-    margin: 1rem 0;
-}
-
-.fields dt {
+.field-label {
     font-weight: 600;
-    color: #444;
 }
 
-.fields dd {
-    margin: 0;
+.field-hint {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--muted);
+}
+
+.review-field input,
+.review-field textarea,
+.history-search input {
+    display: block;
+    width: 100%;
+    min-height: var(--tap);
+    padding: var(--space-2) var(--space-3);
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.review-field textarea {
+    resize: vertical;
+}
+
+/* Confidence dưới 0,9, có giá trị, chưa ai sửa. Trường RỖNG không tô — chỉ có nhãn "chưa có". */
+.field-check input,
+.field-check textarea {
+    background: var(--warn-bg);
+    border: 2px solid var(--warn-edge);
+}
+
+.tag {
+    display: inline-block;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: var(--text-sm);
+    font-weight: 400;
+    color: var(--muted);
+}
+
+.tag-check {
+    background: var(--warn-bg);
+    border-color: var(--warn-edge);
+    color: var(--text);
+}
+
+.tag-edited {
+    border-color: var(--link);
+    color: var(--link);
+}
+
+.list-row {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.list-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+.field-note {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    color: var(--muted);
+}
+
+.field-error {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--danger-edge);
+}
+
+.note-code {
+    white-space: nowrap;
+}
+
+/* Hai cột: ảnh trái để đối chiếu, trường phải (PRD US-03). Ảnh bám theo khi cuộn qua các trường, và
+   không cao quá màn hình — ảnh dọc mà cao hơn khung nhìn thì phần dưới không bao giờ lộ ra. */
+@media (min-width: 720px) {
+    .review {
+        grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+        align-items: start;
+    }
+
+    .review-image {
+        position: sticky;
+        top: var(--space-4);
+    }
+
+    .review-photo {
+        max-height: 80vh;
+        object-fit: contain;
+    }
+}
+
+/* ---- Trang Lịch sử — T-14 ------------------------------------------------------------------ */
+
+.history-search {
+    margin: var(--space-4) 0 var(--space-2);
+}
+
+/* Ô tìm và nút Xuất CSV cùng một hàng; màn hình hẹp thì nút xuống dòng. */
+.history-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin: var(--space-1) 0;
+}
+
+.history-toolbar input {
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+
+.history-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    margin: var(--space-4) 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* Cả thẻ là một liên kết tới /review/{id}. Điện thoại: ảnh nhỏ bên trái, chữ bên phải — một màn hình thấy 5–6
+   hồ sơ thay vì 2. */
+.history-card {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: start;
+    height: 100%;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+}
+
+.history-card:hover,
+.history-card:focus-visible {
+    border-color: var(--accent);
+}
+
+/* Khung tỉ lệ danh thiếp 91×55, ảnh cắt vừa bằng object-fit — thu nhỏ bằng CSS, server không đụng pixel (SPEC
+   mục 1). Ô chữ cái đầu dùng cùng khung để lưới không lệch. */
+.history-thumb {
+    display: block;
+    width: 100%;
+    aspect-ratio: 91 / 55;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+}
+
+/* Hồ sơ không ảnh (mồi, lưu qua MCP — SPEC 19.3, 10.6). */
+.history-initial {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    font-size: var(--text-xl);
+    font-weight: 700;
+}
+
+.history-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.history-name {
+    font-size: var(--text-lg);
+    line-height: 1.3;
+}
+
+/* Email dài không có dấu cách là thứ hay đẩy thẻ ra quá bề ngang nhất. */
+.history-line {
     overflow-wrap: anywhere;
 }
 
-.muted {
-    color: #666;
-    font-size: 0.85rem;
+.history-meta {
+    margin-top: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--muted);
 }
 
-/* Điện thoại: bớt lề, và bảng trường xuống một cột cho đỡ vỡ. */
-@media (max-width: 480px) {
-    body { margin: 1rem; }
+/* Máy tính: lưới 2 cột, ảnh nằm trên và to hơn — trên màn hình đang chia sẻ, trông như một chồng danh thiếp. */
+@media (min-width: 720px) {
+    .history-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 
-    .fields { grid-template-columns: 1fr; gap: 0; }
-    .fields dd { margin-bottom: 0.6rem; }
+    .history-card {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .history-initial {
+        font-size: 2.5rem;
+    }
+}
+
+/* 3 cột khi vùng nội dung đã rộng hết --content-max (60rem). */
+@media (min-width: 960px) {
+    .history-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* ---- Điện thoại ---------------------------------------------------------------------------- */
+
+@media (max-width: 480px) {
+    /* Nút chụp chiếm hết bề ngang: mục tiêu lớn nhất trên trang, ngón cái chạm từ đâu cũng trúng. */
+    .capture-button {
+        display: flex;
+        width: 100%;
+    }
+
+    /* Bảng trường xuống một cột cho đỡ vỡ. */
+    .fields {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .fields dd {
+        margin-bottom: var(--space-3);
+    }
+
+    /* Hàng nút xếp dọc, mỗi nút hết bề ngang — "Chụp thẻ tiếp" và "Lưu" chạm bằng ngón cái từ đâu cũng trúng. */
+    .actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }

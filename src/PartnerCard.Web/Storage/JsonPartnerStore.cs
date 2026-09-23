@@ -1,5 +1,6 @@
 using System.Text.Json;
 using PartnerCard.Web.Models;
+using PartnerCard.Web.Processing;
 
 namespace PartnerCard.Web.Storage;
 
@@ -63,12 +64,15 @@ public sealed class JsonPartnerStore : IPartnerStore, IDisposable
     {
         ct.ThrowIfCancellationRequested();
 
-        // T-02 mới lọc chuỗi con không phân biệt hoa thường trên hai trường hiển nhiên nhất.
-        // Tìm đủ sáu trường và tìm không dấu (S-10, S-16…S-22) thuộc T-14 — cả hai cần
-        // nameKey/companyKey của Normalizer, mà Normalizer là T-05.
+        // Hai phía cùng qua NameKey (SPEC 5.3): bỏ dấu, chữ thường, gộp khoảng trắng — gõ "nguyen van an"
+        // ra "Nguyễn Văn An" (S-10). Rỗng sau khi qua khoá thì không lọc.
+        var keyword = TextKeys.NameKey(query.Keyword);
+        var company = TextKeys.NameKey(query.Company);
+
+        // Where chứ không SelectMany: hồ sơ khớp ở hai trường vẫn chỉ ra một lần (S-20).
         var matches = _partners
-            .Where(p => Contains(p.FullName, query.Keyword) || Contains(p.Company, query.Keyword))
-            .Where(p => query.Company is null || Contains(p.Company, query.Company))
+            .Where(p => keyword.Length == 0 || SearchFields(p).Any(value => Matches(value, keyword)))
+            .Where(p => company.Length == 0 || Matches(p.Company, company))
             .OrderByDescending(p => p.UpdatedAt)
             .ThenByDescending(p => p.PartnerId, StringComparer.Ordinal)
             .Take(QueryLimits.Normalize(query.Take))
@@ -186,9 +190,31 @@ public sealed class JsonPartnerStore : IPartnerStore, IDisposable
         partners.FirstOrDefault(p =>
             string.Equals(p.PartnerId, partnerId, StringComparison.OrdinalIgnoreCase));
 
-    private static bool Contains(string? value, string? term) =>
-        string.IsNullOrWhiteSpace(term)
-        || (value is not null && value.Contains(term, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// Sáu trường của PRD US-06, một ô từ khoá cho cả hai nhóm: định danh (<c>fullName</c>, <c>company</c>,
+    /// <c>emails</c>, <c>searchAlias</c>) và phân loại (<c>jobTitle</c>, <c>address</c>). Tách nhóm phân loại
+    /// thành bộ lọc riêng là F-16, khi kho vượt khoảng 200 hồ sơ.
+    ///
+    /// <c>searchAlias</c> là thứ làm thẻ Nhật tìm lại được bằng chữ Latin — <c>aoba</c> ra <c>株式会社青葉精工</c> (S-19).
+    /// </summary>
+    private static IEnumerable<string?> SearchFields(Partner partner)
+    {
+        yield return partner.FullName;
+        yield return partner.Company;
+
+        foreach (var email in partner.Emails)
+        {
+            yield return email;
+        }
+
+        yield return partner.SearchAlias;
+        yield return partner.JobTitle;
+        yield return partner.Address;
+    }
+
+    /// <summary>Khớp chuỗi con trên khoá. <paramref name="key"/> đã qua <see cref="TextKeys.NameKey"/>.</summary>
+    private static bool Matches(string? value, string key) =>
+        TextKeys.NameKey(value).Contains(key, StringComparison.Ordinal);
 
     private static IReadOnlyList<Partner> ReadPartners(string partnersPath)
     {

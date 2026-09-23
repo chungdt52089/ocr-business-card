@@ -1,0 +1,31 @@
+@inherits LayoutComponentBase
+
+@*
+    Khung dùng chung — T-19. Mọi trang lắp vào đây qua DefaultLayout trong Routes.razor.
+
+    Render TĨNH: không có @rendermode. Trang nào cần tương tác tự khai báo của riêng nó (Capture.razor
+    là InteractiveServer). Đặt rendermode ở đây thì mọi trang thành tương tác, kể cả những trang không
+    cần giữ một circuit SignalR.
+
+    Tên trang theo mẫu "<tên trang> · Scanie", đặt bằng <PageTitle> ở từng trang.
+*@
+
+<header class="site-header">
+    <a class="brand" href="">Scanie</a>
+    <nav class="site-nav" aria-label="Trang">
+        <NavLink href="" Match="NavLinkMatch.All">Chụp</NavLink>
+        @* /review/{id} không có mục riêng: tới đó bằng cách bấm một thẻ trong Lịch sử. *@
+        <NavLink href="partners">Lịch sử</NavLink>
+    </nav>
+</header>
+
+@* Yêu cầu của bản deploy công khai (BRD mục 4, bổ sung 21/09), không phải trang trí: ai có URL cũng tải
+   ảnh lên được, nên dải này phải có trên MỌI trang — vì thế nó nằm ở layout, không ở từng trang.
+   Không sticky: trên điện thoại nó sẽ ăn mất một khúc màn hình suốt lúc cuộn. *@
+<p class="demo-banner" role="note">
+    <strong>Bản thử nghiệm</strong> — chỉ dùng danh thiếp mẫu, không tải danh thiếp thật lên
+</p>
+
+<main class="site-main">
+    @Body
+</main>

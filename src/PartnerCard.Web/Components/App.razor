@@ -4,9 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    @* Khai báo trang có bảng màu tối của riêng nó (app.css). Không có dòng này, Chrome Android ở chế độ
+       tối tự làm tối trang bằng thuật toán — đảo màu nút và chữ theo ý nó, không theo ý mình. *@
+    <meta name="color-scheme" content="light dark" />
     @* @Assets[...] trả URL có dấu vân tay nội dung (MapStaticAssets, Program.cs): mỗi bản build một
        URL, nên trình duyệt không bao giờ dùng CSS/JS của bản trước nằm trong cache. *@
     <link rel="stylesheet" href="@Assets["app.css"]" />
+    @* Có thẻ này thì trình duyệt thôi tự xin /favicon.ico — trước đây request đó 404 mỗi lần mở trang. *@
+    <link rel="icon" type="image/svg+xml" href="@Assets["favicon.svg"]" />
     @* Bảng ánh xạ ./js/capture.js → URL có dấu vân tay, kèm integrity. Phải đứng trước mọi lần nạp
        module; import() của trang chụp chỉ chạy sau khi circuit lên, nên đặt trong <head> là đủ. *@
     <ImportMap />

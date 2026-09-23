@@ -114,6 +114,14 @@ app.MapStaticAssets();
 // Làm ở T-01 chứ không đợi T-12 — hỏng thì biết sớm mười ngày (SPEC mục 18.4).
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
+// Ảnh gốc cho màn hình xác nhận (T-13) và ảnh thu nhỏ của trang Lịch sử (T-14) — SPEC mục 11.3.
+// Endpoint riêng có kiểm tên file, KHÔNG phải UseStaticFiles trỏ vào data/: thư mục đó còn chứa kho.
+app.MapGet(ImageEndpoint.Route, ImageEndpoint.Serve);
+
+// Xuất CSV cho trang Lịch sử (T-14, PRD US-06). REST thường, KHÔNG phải tool MCP — SPEC 10.4 không cho tool
+// xuất file.
+app.MapGet(CsvExportEndpoint.Route, CsvExportEndpoint.ServeAsync);
+
 // Phải khớp SessionContext.McpPath — chỉ lời gọi dưới đường dẫn này mới bị cảnh báo khi thiếu X-Session-Id.
 app.MapMcp("/mcp");
 

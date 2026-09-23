@@ -25,10 +25,13 @@ public sealed class PartnerTools(IPartnerStore store, ILogger<PartnerTools> logg
 
     [McpServerTool(Name = SearchTool)]
     [Description("Tìm hồ sơ đối tác đã lưu. Chỉ đọc, không thay đổi gì trong kho. Từ khoá khớp chuỗi con, "
-               + "không phân biệt hoa thường, trên họ tên và tên công ty. Bỏ trống mọi tiêu chí thì trả các hồ sơ "
-               + "cập nhật gần nhất. Mặc định 20 hồ sơ, tối đa 100.")]
+               + "không phân biệt hoa thường, gõ không dấu vẫn khớp chữ có dấu, trên sáu trường: họ tên, công ty, "
+               + "email, gợi ý tìm kiếm (phiên âm Latin của thẻ tiếng Nhật), chức danh, địa chỉ. Bỏ trống mọi tiêu "
+               + "chí thì trả các hồ sơ cập nhật gần nhất. Mặc định 20 hồ sơ, tối đa 100.")]
     public async Task<SearchPartnersToolResult> SearchPartnersAsync(
-        [Description("Từ khoá tìm trong họ tên và tên công ty. Bỏ trống để không lọc")] string? keyword = null,
+        [Description("Từ khoá tìm trong họ tên, công ty, email, gợi ý tìm kiếm, chức danh và địa chỉ. "
+                   + "Thẻ tiếng Nhật tìm được bằng chữ Latin, ví dụ tanaka hoặc tokyo. Bỏ trống để không lọc")]
+        string? keyword = null,
         [Description("Lọc thêm theo tên công ty, khớp chuỗi con. Bỏ trống để không lọc")] string? company = null,
         [Description("Số hồ sơ tối đa, mặc định 20, tối đa 100")] int take = QueryLimits.DefaultTake,
         CancellationToken ct = default)
