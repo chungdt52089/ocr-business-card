@@ -36,6 +36,9 @@
     --banner-bg: #fff3cd;
     --banner-text: #5c4300;
     --banner-edge: #e0b000;
+    /* Màn che sau hộp nối lại (F-18). CỐ Ý không khai báo lại ở khối nền tối: màn đen mờ đọc được
+       trên cả hai nền, nên đây là token duy nhất của file có một giá trị duy nhất. */
+    --scrim: rgba(0, 0, 0, 0.55);
 
     --space-1: 0.25rem;
     --space-2: 0.5rem;
@@ -312,6 +315,16 @@ h1 {
     background: var(--disabled);
     cursor: default;
     filter: none;
+}
+
+/* Cần luật này vì display:inline-flex ở trên là kiểu của TÁC GIẢ, mà kiểu tác giả luôn thắng quy tắc
+   [hidden]{display:none} trong stylesheet của trình duyệt — bất kể độ đặc hiệu. Thiếu nó thì đặt
+   .hidden = true trong JS không giấu được nút: nó vẫn chiếm chỗ, và nếu chưa kịp gán chữ thì hiện ra
+   một ô xanh rỗng (đã vấp ở nhánh rejected của hộp nối lại, F-18).
+   Cùng cái bẫy đã vá cho .reconnect-actions, nhưng để ở đây — phạm vi toàn cục — vì bẫy nằm ở chính
+   .button, nên mọi nút của dự án đều dính, không riêng hộp nối lại. */
+.button[hidden] {
+    display: none;
 }
 
 .button-secondary {
@@ -691,9 +704,90 @@ h1 {
     }
 }
 
+/* ---- Hộp nối lại — F-18 ---------------------------------------------------------------------
+ *
+ * Phần tử <dialog id="components-reconnect-modal"> do wwwroot/js/reconnect.js dựng, KHÔNG có trong
+ * markup — lý do ở đầu file JS đó. Ở đây chỉ có kiểu dáng.
+ *
+ * Hai điều phải giữ:
+ *   1. Chỉ nhìn [data-open] — thuộc tính do reconnect.js đặt. TUYỆT ĐỐI không nhìn các class
+ *      .components-reconnect-* mà Blazor tự bật/tắt: chúng bật ngay lúc đứt, còn cả điểm của F-18 là
+ *      hoãn ~2 giây để lần nối lại sau khi chụp trên Android trôi qua không chớp hộp nào.
+ *   2. Blazor KHÔNG gọi showModal(), nó chỉ đổi class. Nên <dialog> này không vào top layer và
+ *      không có ::backdrop — màn che, position và z-index phải tự đặt, và phải ghi đè mấy mặc định
+ *      của trình duyệt cho <dialog> (display:none khi không [open], margin:auto, max-width/height).
+ */
+
+dialog#components-reconnect-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: var(--space-4);
+    border: 0;
+    background: var(--scrim);
+    /* Cả file không có z-index nào khác, chỉ một position:sticky ở .review-image — 100 là dư. */
+    z-index: 100;
+}
+
+dialog#components-reconnect-modal[data-open] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.reconnect-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    width: 100%;
+    max-width: 22rem;
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    text-align: center;
+}
+
+.reconnect-text {
+    margin: 0;
+    font-size: var(--text-lg);
+}
+
+.reconnect-actions {
+    display: flex;
+    gap: var(--space-3);
+}
+
+/* Cần dòng này vì display:flex ở trên (kiểu của tác giả) thắng quy tắc [hidden]{display:none} của
+   trình duyệt. Thiếu nó thì hàng nút "ẩn" vẫn chiếm chỗ. */
+.reconnect-actions[hidden] {
+    display: none;
+}
+
+/* Con quay to hơn bản trong dòng trạng thái: ở đây nó là thứ duy nhất báo "vẫn đang chạy".
+   Luật prefers-reduced-motion của .spinner ở trên vẫn áp dụng. */
+.reconnect-card .spinner {
+    width: 1.6rem;
+    height: 1.6rem;
+}
+
 /* ---- Điện thoại ---------------------------------------------------------------------------- */
 
 @media (max-width: 480px) {
+    /* Hai nút xếp dọc, mỗi nút hết bề ngang — giống .actions của màn xác nhận. */
+    .reconnect-actions {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+
     /* Nút chụp chiếm hết bề ngang: mục tiêu lớn nhất trên trang, ngón cái chạm từ đâu cũng trúng. */
     .capture-button {
         display: flex;
