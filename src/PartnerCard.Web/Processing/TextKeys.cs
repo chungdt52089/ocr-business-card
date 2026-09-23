@@ -8,9 +8,10 @@ namespace PartnerCard.Web.Processing;
 /// Khoá so sánh — SPEC mục 5.3. **Chỉ dùng để chống trùng và tìm kiếm.**
 /// Sinh lúc chạy, không bao giờ ghi vào hồ sơ: hồ sơ luôn giữ giá trị gốc (ca N-13).
 ///
-/// Ở MVP mới có <c>emailKey</c> được gọi (SPEC mục 8 rút chống trùng về chỉ so email).
-/// <c>nameKey</c> và <c>companyKey</c> vẫn được xây và kiểm thử vì chúng là nền cho F-05
-/// (gộp hồ sơ trùng) và F-16 — **không phải code chết**.
+/// Người gọi ở MVP: <see cref="NameKey"/> là luật so của tìm kiếm (<c>JsonPartnerStore.SearchAsync</c>, T-14);
+/// <see cref="CompanyKey"/> cho chữ cái đầu của hồ sơ không ảnh ở trang Lịch sử (T-14). Chống trùng chỉ so
+/// email (SPEC mục 8), nên <see cref="CompanyKey"/> ở vai khoá chống trùng vẫn là nền cho F-05 (gộp hồ sơ
+/// trùng) và F-16.
 /// </summary>
 public static partial class TextKeys
 {

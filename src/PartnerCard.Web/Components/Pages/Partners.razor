@@ -1,0 +1,266 @@
+@page "/partners"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject IPartnerStore Store
+@inject ImageStore Images
+
+@*
+    Trang Lịch sử — T-14, PRD US-06. Đường dẫn vẫn là /partners (SPEC mục 11); điều hướng ghi "Lịch sử".
+
+    Chỉ ĐỌC kho, cùng loại với tool search_partners và Review.razor. Trang này không ghi gì nên không có
+    CardPipeline ở đây: bấm thẻ mở /review/{id}, và sửa/lưu ở đó đi qua đường ống.
+
+    Tự làm mới mỗi 2 giây (F-01, kéo vào T-14): chụp trên điện thoại ở đâu cũng được, hồ sơ tự hiện trên màn hình
+    đang chia sẻ Teams mà không phải bấm F5.
+*@
+
+<PageTitle>Lịch sử · Scanie</PageTitle>
+
+<h1>Lịch sử</h1>
+
+@* Thanh đầu trang nằm NGOÀI mọi @if: lượt tự làm mới không bao giờ dựng lại ô tìm kiếm, nên chữ đang gõ và
+   focus còn nguyên. LoadAsync chỉ đọc _keyword, không bao giờ ghi. *@
+<div class="history-search">
+    <label class="field-label" for="history-q">Tìm</label>
+    <div class="history-toolbar">
+        <input id="history-q" type="search" autocomplete="off" enterkeyhint="search"
+               placeholder="Tên, công ty, email, chức danh, địa chỉ…"
+               @bind="_keyword" @bind:event="oninput" @bind:after="LoadAsync" />
+        @* download: blazor.web.js không lấy liên kết có thuộc tính này làm điều hướng nâng cao, nên trình duyệt tải
+           file như một liên kết thường. data-enhance-nav="false" là chốt thứ hai cho cùng việc đó. *@
+        <a class="button button-secondary" href="@CsvExportEndpoint.Url" download data-enhance-nav="false">Xuất CSV</a>
+    </div>
+    <p class="field-hint">Gõ không dấu vẫn ra. Thẻ tiếng Nhật tìm bằng chữ Latin: tanaka, tokyo.</p>
+</div>
+
+<p class="muted">
+    @_items.Count hồ sơ@(_items.Count >= QueryLimits.MaxTake ? $" (hiện tối đa {QueryLimits.MaxTake})" : null)
+    · tự cập nhật mỗi 2 giây
+</p>
+
+@if (_items.Count == 0)
+{
+    <div class="result">
+        @if (string.IsNullOrWhiteSpace(_resultKeyword))
+        {
+            <p>Chưa có hồ sơ nào.</p>
+            <div class="actions">
+                <a class="button" href="">Chụp thẻ đầu tiên</a>
+            </div>
+        }
+        else
+        {
+            <p>Không có hồ sơ nào khớp “@_resultKeyword”.</p>
+            <div class="actions">
+                <button type="button" class="button button-secondary" @onclick="ClearSearchAsync">Xoá tìm kiếm</button>
+            </div>
+        }
+    </div>
+}
+else
+{
+    @* @key theo mã hồ sơ: mỗi lượt làm mới, Blazor so thẻ theo mã chứ không dựng lại cả lưới. *@
+    <ul class="history-list">
+        @foreach (var item in _items)
+        {
+            <li @key="item.PartnerId">
+                <a class="history-card" href="@($"review/{item.PartnerId}")">
+                    @if (item.ImageUrl is not null)
+                    {
+                        @* Thu nhỏ bằng CSS (object-fit), server không đụng pixel — SPEC mục 1. Ảnh đi qua endpoint có
+                           kiểm đường dẫn của T-13 (SPEC 11.3). *@
+                        <img class="history-thumb" src="@item.ImageUrl" alt="" loading="lazy" />
+                    }
+                    else
+                    {
+                        <span class="history-thumb history-initial" aria-hidden="true">@item.Initial</span>
+                    }
+                    <span class="history-body">
+                        <strong class="history-name">@item.Title</strong>
+                        @foreach (var line in item.Lines)
+                        {
+                            <span class="history-line">@line</span>
+                        }
+                        <span class="history-meta">
+                            @item.PartnerId · <time datetime="@item.CreatedAtIso">@item.ScannedAt</time>
+                        </span>
+                    </span>
+                </a>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(2);
+
+    private string _keyword = string.Empty;
+
+    // Từ khoá mà _items đang trả lời — câu "không có hồ sơ nào khớp …" phải nói đúng từ khoá của danh sách.
+    private string _resultKeyword = string.Empty;
+
+    private IReadOnlyList<HistoryItem> _items = [];
+    private PeriodicTimer? _refresh;
+
+    // Mã băm của những ảnh đã thấy có trên đĩa. Tên file là mã băm nội dung và ImageStore không xoá gì, nên đã có
+    // thì còn có suốt vòng đời tiến trình — không phải hỏi đĩa lại mỗi 2 giây cho từng thẻ. Chỉ nhớ lần "có": lần
+    // "chưa có" thì lượt sau hỏi lại, vì ảnh có thể xuống đĩa sau khi hồ sơ đã hiện.
+    private readonly HashSet<string> _knownImages = new(StringComparer.Ordinal);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // OnAfterRender không chạy ở lượt prerender, nên bộ đếm giờ chỉ có khi đã có circuit để đẩy thay đổi về.
+        if (firstRender)
+        {
+            _refresh = new PeriodicTimer(RefreshEvery);
+            _ = RefreshLoopAsync(_refresh);
+        }
+    }
+
+    private async Task RefreshLoopAsync(PeriodicTimer timer)
+    {
+        try
+        {
+            // Dispose() huỷ bộ đếm giờ: WaitForNextTickAsync trả false và vòng lặp thoát.
+            while (await timer.WaitForNextTickAsync())
+            {
+                await InvokeAsync(async () =>
+                {
+                    await LoadAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            // Như Capture.razor: một task bỏ rơi mà lỗi thì trang cứ đứng đó, không ai biết vì sao hết tự cập nhật.
+            await DispatchExceptionAsync(ex);
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        // Ghi lại từ khoá của lượt này. Xong mà người dùng đã gõ tiếp thì BỎ kết quả: danh sách của từ khoá cũ không
+        // được đè lên từ khoá mới, dù nó đến từ lượt tự làm mới hay lượt gõ phím trước. JsonPartnerStore hiện trả về
+        // đồng bộ nên chưa có chỗ chen — chốt này giữ đúng khi kho đổi sang bất đồng bộ.
+        var asked = _keyword;
+
+        var partners = await Store.SearchAsync(
+            new PartnerQuery(asked, Take: QueryLimits.MaxTake), CancellationToken.None);
+
+        if (!string.Equals(asked, _keyword, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // Mới QUÉT nhất trên cùng (createdAt). Kho tự sắp theo updatedAt — đó là thứ tự của search_partners (S-07).
+        _items =
+        [
+            .. partners
+                .OrderByDescending(p => p.CreatedAt)
+                .ThenByDescending(p => p.PartnerId, StringComparer.Ordinal)
+                .Select(ToItem),
+        ];
+        _resultKeyword = asked;
+    }
+
+    private Task ClearSearchAsync()
+    {
+        _keyword = string.Empty;
+        return LoadAsync();
+    }
+
+    private HistoryItem ToItem(Partner p)
+    {
+        var lines = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(p.JobTitle))
+        {
+            lines.Add(p.JobTitle);
+        }
+
+        // Hồ sơ thiếu tên thì công ty đã đứng ở dòng tiêu đề — không lặp lại.
+        if (!string.IsNullOrWhiteSpace(p.FullName) && !string.IsNullOrWhiteSpace(p.Company))
+        {
+            lines.Add(p.Company);
+        }
+
+        var emails = string.Join(", ", p.Emails.Where(e => !string.IsNullOrWhiteSpace(e)));
+        if (emails.Length > 0)
+        {
+            lines.Add(emails);
+        }
+
+        return new HistoryItem(
+            PartnerId: p.PartnerId,
+            Title: new[] { p.FullName, p.Company }.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? "(chưa có tên)",
+            Lines: lines,
+            ImageUrl: ImageUrlOf(p.ImageSha256),
+            Initial: InitialOf(p),
+            ScannedAt: VietnamTime.Short(p.CreatedAt),
+            CreatedAtIso: VietnamTime.Iso(p.CreatedAt));
+    }
+
+    /// <summary>
+    /// URL ảnh, hoặc <c>null</c> khi hồ sơ không có ảnh (mồi, lưu qua MCP — SPEC 19.3, 10.6) hay ảnh không còn trên
+    /// đĩa (Cloud Run thay instance).
+    /// </summary>
+    private string? ImageUrlOf(string imageSha256)
+    {
+        if (string.IsNullOrEmpty(imageSha256))
+        {
+            return null;
+        }
+
+        if (!_knownImages.Contains(imageSha256))
+        {
+            if (!Images.Exists(imageSha256))
+            {
+                return null;
+            }
+
+            _knownImages.Add(imageSha256);
+        }
+
+        return ImageEndpoint.UrlFor(imageSha256);
+    }
+
+    /// <summary>
+    /// Chữ cái đầu cho ô thay ảnh. Lấy từ <see cref="TextKeys.CompanyKey"/> chứ không từ tên gốc: bỏ chỉ danh pháp
+    /// nhân thì <c>株式会社常磐電子</c> ra <c>常</c> — lấy từ tên gốc thì mọi công ty Nhật đặt <c>株式会社</c> trước tên
+    /// đều ra cùng một chữ <c>株</c>. Thiếu công ty thì lấy từ họ tên; thiếu cả hai thì <c>?</c>.
+    /// </summary>
+    private static string InitialOf(Partner p)
+    {
+        foreach (var key in new[] { TextKeys.CompanyKey(p.Company), TextKeys.NameKey(p.FullName) })
+        {
+            // Duyệt theo phần tử văn bản chứ không theo char: chữ Hán ngoài BMP là hai char. Bỏ qua dấu câu đứng
+            // đầu, như "(" của "(株)".
+            var elements = StringInfo.GetTextElementEnumerator(key);
+            while (elements.MoveNext())
+            {
+                var element = elements.GetTextElement();
+                if (char.IsLetterOrDigit(element, 0))
+                {
+                    return element.ToUpperInvariant();
+                }
+            }
+        }
+
+        return "?";
+    }
+
+    public void Dispose() => _refresh?.Dispose();
+
+    /// <summary>Một thẻ đã dựng sẵn: lúc render không tính gì, không đụng đĩa.</summary>
+    private sealed record HistoryItem(
+        string PartnerId,
+        string Title,
+        IReadOnlyList<string> Lines,
+        string? ImageUrl,
+        string Initial,
+        string ScannedAt,
+        string CreatedAtIso);
+}

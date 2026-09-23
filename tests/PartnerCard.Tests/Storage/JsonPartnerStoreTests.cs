@@ -140,6 +140,58 @@ public sealed class JsonPartnerStoreTests
         results.Should().HaveCount(20);
     }
 
+    // ---- S-10, S-11, S-19 · tìm trên sáu trường, bỏ dấu (T-14) ----------------------
+
+    [Fact]
+    public async Task S10_tim_khong_dau_khop_ho_so_co_dau()
+    {
+        using var data = new TempDataDirectory();
+        using var store = Open(data);
+        await store.UpsertAsync(
+            PartnerFactory.New(fullName: "Nguyễn Văn An", email: "an.nguyen@abc.example"), CancellationToken.None);
+        await store.UpsertAsync(PartnerFactory.New(), CancellationToken.None);
+
+        var results = await store.SearchAsync(new PartnerQuery("nguyen van an"), CancellationToken.None);
+
+        results.Select(p => p.FullName).Should().Equal(["Nguyễn Văn An"]);
+    }
+
+    [Fact]
+    public async Task S11_tim_ABC_khop_ca_company_lan_emails()
+    {
+        using var data = new TempDataDirectory();
+        using var store = Open(data);
+        var byCompany = await store.UpsertAsync(
+            PartnerFactory.New(fullName: "Lena Hart", company: "ABC Trading Co., Ltd.", email: "l.hart@lh.example"),
+            CancellationToken.None);
+        var byEmail = await store.UpsertAsync(
+            PartnerFactory.New(fullName: "Omar Said", company: "Northwind", email: "o.said@abc.example"),
+            CancellationToken.None);
+        await store.UpsertAsync(PartnerFactory.New(), CancellationToken.None);
+
+        var results = await store.SearchAsync(new PartnerQuery("ABC"), CancellationToken.None);
+
+        results.Select(p => p.PartnerId).Should().BeEquivalentTo([byCompany.PartnerId, byEmail.PartnerId]);
+    }
+
+    [Fact]
+    public async Task S19_tim_aoba_khop_tren_searchAlias()
+    {
+        using var data = new TempDataDirectory();
+        using var store = Open(data);
+        // Email cố ý KHÔNG chứa "aoba": ca này chỉ được phép khớp qua searchAlias. Tên, công ty, địa chỉ
+        // đều là chữ Nhật — không có searchAlias thì gõ chữ Latin không bao giờ ra thẻ này (PRD US-06).
+        var tanaka = await store.UpsertAsync(
+            PartnerFactory.New(fullName: "田中 太郎", company: "株式会社青葉精工", email: "t.tanaka@seiko.example")
+                with { SearchAlias = "Tanaka Taro Aoba Seiko Tokyo Chiyoda", Address = "東京都千代田区丸の内 1-1" },
+            CancellationToken.None);
+        await store.UpsertAsync(PartnerFactory.New(), CancellationToken.None);
+
+        var results = await store.SearchAsync(new PartnerQuery("aoba"), CancellationToken.None);
+
+        results.Select(p => p.PartnerId).Should().Equal([tanaka.PartnerId]);
+    }
+
     // ---- S-12, S-13 · nạp file lúc khởi động ---------------------------------------
 
     [Fact]
