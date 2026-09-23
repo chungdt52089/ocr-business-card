@@ -19,6 +19,16 @@
 </head>
 <body>
     <Routes />
+    @* Hộp nối lại tiếng Việt (F-18). Ở đây CHỈ có thẻ script — phần tử <dialog id="components-reconnect-modal">
+       do chính reconnect.js dựng lúc nó chạy. Đặt sẵn cái <dialog> ở đây là hỏng âm thầm: file JS lỗi thì vỏ
+       vẫn còn, Blazor thấy phần tử nên thôi dựng hộp mặc định, và mất kết nối không còn báo gì. Lý do đầy đủ
+       ở đầu reconnect.js.
+
+       Script CỔ ĐIỂN, không type="module", và đứng TRƯỚC blazor.web.js: script cổ điển trong <body> chạy đúng
+       thứ tự tài liệu, nên hộp chắc chắn có mặt trước khi Blazor chạy dòng đầu. Module thì bị hoãn tới sau
+       blazor.web.js — vẫn kịp vì Blazor tìm phần tử ở lần mất kết nối đầu tiên chứ không phải lúc khởi động,
+       nhưng đó là một lập luận, không phải một bảo đảm. capture.js là module vì nó được import() từ C#. *@
+    <script src="@Assets["js/reconnect.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 </html>
