@@ -1,0 +1,42 @@
+# H-01 — sensor trên mỗi PR: build, test (fake, không mạng), quét khoá API.
+# Không dùng secret nào: test chạy với Extractor = fake, ca Live tự Skipped khi thiếu GEMINI_API_KEY.
+name: ci
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      PartnerCard__Extractor: fake
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+
+      # Repo công khai, log CI ai cũng đọc được: chỉ in tên file (-l), không in chuỗi khoá.
+      - name: Quét khoá Google API (AIza…)
+        shell: pwsh
+        run: |
+          $files = git grep -lE 'AIza[0-9A-Za-z_-]{35}'
+          if ($LASTEXITCODE -eq 0) { Write-Host "::error::Có chuỗi giống khoá Google API trong: $($files -join ', ')"; exit 1 }
+          if ($LASTEXITCODE -gt 1) { exit $LASTEXITCODE }
+          exit 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Test
+        run: dotnet test -c Release --no-build --filter "Category!=Live"
