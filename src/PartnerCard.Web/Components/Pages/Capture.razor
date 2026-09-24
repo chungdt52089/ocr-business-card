@@ -101,11 +101,13 @@
             <p class="result-code">mã lỗi: @outcome.ErrorCode</p>
         </div>
     }
-    else if (outcome.Card is { IsBusinessCard: false } rejected)
+    else if (outcome.Card is { IsBusinessCard: false })
     {
+        @* Không hiện RejectReason (F-19): câu đó do mô hình tự viết, lúc tiếng Anh lúc tiếng Việt không
+           dấu. Giá trị vẫn nằm trong dữ liệu trả về và tool MCP — không đổi schema, không sửa prompt. *@
         <div class="result result-reject">
             <p><strong>Đây không phải danh thiếp.</strong></p>
-            <p>@rejected.RejectReason</p>
+            <p>Hãy chụp lại một tấm danh thiếp.</p>
         </div>
     }
 }
