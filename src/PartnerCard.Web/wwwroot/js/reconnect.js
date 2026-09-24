@@ -2,9 +2,10 @@
 //
 // VÌ SAO PHẦN TỬ <dialog> DỰNG Ở ĐÂY CHỨ KHÔNG ĐẶT SẴN TRONG App.razor — đọc trước khi "dọn dẹp":
 //
-//   blazor.web.js chọn hộp MỘT LẦN, ở lần mất kết nối đầu tiên, rồi nhớ suốt đời trang:
+//   blazor.web.js chọn hộp MỘT LẦN, ở lần mất kết nối đầu tiên, rồi nhớ THAM CHIẾU TỚI PHẦN TỬ suốt
+//   đời trang:
 //       const el = document.getElementById('components-reconnect-modal');
-//       display = el ? <hộp của ta> : <hộp mặc định tiếng Anh>;
+//       display = el ? <hộp của ta, giữ el> : <hộp mặc định tiếng Anh>;
 //
 //   File này 404 hoặc ném lỗi  →  không có phần tử  →  Blazor dựng hộp mặc định.
 //   Xấu, nhưng mất kết nối VẪN ĐƯỢC BÁO.
@@ -12,6 +13,11 @@
 //   Đặt sẵn <dialog> trong markup thì ngược lại: file hỏng vẫn còn cái vỏ, Blazor thấy phần tử nên
 //   không dựng hộp mặc định, mà không ai viết chữ vào vỏ đó. Mất kết nối thành ra không báo gì —
 //   đúng loại sai âm thầm dự án đang chặn ở nhiều chỗ khác.
+//
+// ENHANCED NAVIGATION XOÁ PHẦN TỬ NÀY. Bấm NavLink thì Blazor vá <body> theo HTML máy chủ, mà <dialog>
+// không có trong đó (F-19, T14B-LOG). File này gắn lại CHÍNH phần tử ấy — nghe `enhancedload`, kèm
+// MutationObserver làm lưới thứ hai; xem mục "Giữ hộp trong trang". Đừng "sửa" bằng cách đặt sẵn
+// <dialog> trong markup — lý do ở đoạn trên.
 //
 // Thẻ <script> nạp file này là script CỔ ĐIỂN đặt ngay TRƯỚC blazor.web.js trong <body>, nên nó chạy
 // xong trước khi Blazor chạy dòng đầu tiên. Xem chú thích ở App.razor.
@@ -238,4 +244,48 @@
     }
 
     dialog.addEventListener(STATE_EVENT, function (e) { render(e.detail); });
+
+    // ---- Giữ hộp trong trang ------------------------------------------------------------------
+    //
+    // Bấm NavLink (Chụp ↔ Lịch sử) là enhanced navigation: Blazor vá <body> theo HTML máy chủ gửi về,
+    // mà HTML đó không có <dialog> này, nên nó bị XOÁ — và script cổ điển không chạy lại. Gắn lại CHÍNH
+    // phần tử đã dựng, không dựng cái mới: nếu Blazor đã chọn hộp thì nó đang giữ tham chiếu tới đúng
+    // phần tử này, và một phần tử mới sẽ không bao giờ nhận được sự kiện trạng thái.
+    //
+    // Chuyển trang trước lần mất kết nối đầu: `enhancedload` bắn ĐỒNG BỘ ngay sau khi vá DOM, cùng một
+    // task, nên hộp đã về trang trước khi sự kiện mất kết nối nào kịp tới — Blazor tìm thấy hộp của ta.
+
+    function ensureAttached() {
+        if (dialog.isConnected) {
+            return;
+        }
+        document.body.appendChild(dialog);
+        // Rời trang lúc đang mở: data-open vẫn còn trên phần tử nên hộp tự hiện lại, nhưng tiêu điểm thì
+        // mất theo. KHÔNG gọi showModal() — hộp này không bao giờ ở top layer (xem app.css), và close()
+        // không gọi dialog.close(), nên showModal() sẽ để lại một trang bị khoá dù hộp đã ẩn.
+        if (visible && !primary.hidden) {
+            primary.focus();
+        }
+    }
+
+    // Lưới 1: MutationObserver. Chạy ngay, không cần Blazor, và bắt mọi lần <dialog> rời <body>, kể cả
+    // những đường ghi DOM không bắn enhancedload. Tự gắn lại cũng sinh một bản ghi, nhưng lúc đó
+    // isConnected = true nên không lặp.
+    new MutationObserver(ensureAttached).observe(document.body, { childList: true });
+
+    // Lưới 2: enhancedload, tín hiệu chính thức của Blazor sau mỗi lần vá DOM. Lúc file này chạy Blazor
+    // CHƯA tồn tại (blazor.web.js đứng sau). Nó là script cổ điển nên chạy xong trước DOMContentLoaded,
+    // và Blazor.addEventListener có ngay lúc nó chạy xong — nên đăng ký ở đó. blazor.web.js hỏng thì bỏ
+    // qua; MutationObserver vẫn giữ hộp.
+    function listenEnhancedLoad() {
+        if (typeof Blazor !== 'undefined' && typeof Blazor.addEventListener === 'function') {
+            Blazor.addEventListener('enhancedload', ensureAttached);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', listenEnhancedLoad);
+    } else {
+        listenEnhancedLoad();
+    }
 })();
