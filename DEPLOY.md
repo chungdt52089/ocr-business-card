@@ -193,3 +193,40 @@ gcloud run services delete scanie --region asia-southeast1
 ```
 
 Image vẫn nằm trong Artifact Registry. Muốn dọn luôn: `gcloud artifacts repositories delete scanie --location asia-southeast1`.
+
+## 8. Quan sát cục bộ
+
+Trace và metric của app (BACKLOG H-02) đổ về một Aspire Dashboard chạy bằng Docker trên laptop.
+**Chỉ dùng cục bộ** — Cloud Run không đặt biến bên dưới, nên bản deploy không xuất gì.
+
+**Chạy dashboard:**
+
+```powershell
+docker run --rm -d --name aspire -p 18888:18888 -p 4317:18889 -e DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true mcr.microsoft.com/dotnet/aspire-dashboard:latest
+```
+
+Mở `http://localhost:18888`. Bỏ đăng nhập được vì dashboard chỉ nghe trên laptop. Cổng `4317` là
+cổng OTLP/gRPC nhận dữ liệu.
+
+**Chạy app có xuất telemetry** — đặt `OTEL_EXPORTER_OTLP_ENDPOINT` trong **cùng** cửa sổ terminal:
+
+```powershell
+$env:OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4317"
+dotnet run --project src/PartnerCard.Web --urls http://0.0.0.0:5080
+```
+
+Bash: `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 dotnet run --project src/PartnerCard.Web --urls http://0.0.0.0:5080`
+
+- **Không có biến → không đăng ký exporter**, app chạy y như cũ. Muốn tắt trong cửa sổ PowerShell
+  đang mở: `Remove-Item Env:OTEL_EXPORTER_OTLP_ENDPOINT`.
+- Muốn thấy span `gen_ai.generate_content` (model, token, số lần thử lại) thì chạy
+  `PartnerCard:Extractor = gemini`; chế độ `fake` chỉ có các span của đường ống.
+- Mỗi lần quét là **một trace riêng**: `pipeline.extract` → `validate` → `gen_ai.generate_content` →
+  `guard` → `normalize` → `confidence`. Bấm Lưu là trace `pipeline.save` → `normalize` →
+  `confidence` → `guard` → `persist`. Request `/_blazor`, `/_framework` và file tĩnh đã lọc bỏ.
+- Span không mang nội dung thẻ — chỉ số đếm, mã lỗi, cờ, tên model (CLAUDE.md luật cứng 9).
+
+**Dừng:** `docker stop aspire` (`--rm` tự xoá container).
+
+> ⚠ Khi Claude Code cũng đổ telemetry về cùng dashboard, khung *Filters* của trang Metrics hiện
+> `user.email`, `user.account_id`, `organization.id`. **Cắt khỏi ảnh chụp, đừng mở khi chia sẻ màn hình.**
