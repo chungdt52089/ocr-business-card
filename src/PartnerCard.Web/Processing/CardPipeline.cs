@@ -4,6 +4,7 @@ using PartnerCard.Web.Audit;
 using PartnerCard.Web.Configuration;
 using PartnerCard.Web.Extraction;
 using PartnerCard.Web.Models;
+using PartnerCard.Web.Observability;
 using PartnerCard.Web.Storage;
 
 namespace PartnerCard.Web.Processing;
@@ -46,11 +47,21 @@ public sealed class CardPipeline(
         string sessionId = "web")
     {
         var started = Stopwatch.GetTimestamp();
+        using var span = Telemetry.StartPipelineSpan("pipeline.extract");
+
+        // Nhãn model cho metric. Chưa tới bước Extract thì lấy theo cấu hình; tới rồi thì lấy số thật.
+        var model = Options.Extractor == ExtractorNames.Fake ? ExtractorNames.Fake : Options.Model;
 
         // ---- Validate ---------------------------------------------------------------
-        var validation = ImageValidation.Validate(imageBase64, mimeType, Options.MaxImageBytes);
+        ImageValidation.Result validation;
+        using (Telemetry.Source.StartActivity("validate"))
+        {
+            validation = ImageValidation.Validate(imageBase64, mimeType, Options.MaxImageBytes);
+        }
+
         if (!validation.Ok)
         {
+            EndExtract(span, started, model, "rejected", validation.ErrorCode);
             return Rejected(validation.ErrorCode!, validation.Message!);
         }
 
@@ -61,11 +72,23 @@ public sealed class CardPipeline(
                 validation.Bytes, mimeType, languageHint, sourceName, ct);
 
             // ---- Guard trên JSON thô, TRƯỚC khi deserialize -------------------------
-            var verdict = guard.Check(raw.Json, GuardBranch.Extraction);
+            GuardResult verdict;
+            CardExtractionResult? card;
+            using (Telemetry.Source.StartActivity("guard"))
+            {
+                verdict = guard.Check(raw.Json, GuardBranch.Extraction);
+                card = verdict.IsBlocked ? null : CardJson.Deserialize(verdict.CleanedJson!);
+            }
+
+            model = raw.Usage.Model;
+            span?.SetTag("partnercard.guard.warnings", verdict.Warnings.Count);
+            Telemetry.GuardWarnings.Add(verdict.Warnings.Count, new KeyValuePair<string, object?>("partnercard.branch", "extract"));
+
             if (verdict.IsBlocked)
             {
                 // Chặn là chặn. Không thử lại — thử lại chỉ tiêu thêm hạn mức mà kết quả vẫn thế (G-13).
                 LogGuardBlock(sessionId, ExtractTool, verdict, Elapsed(started));
+                EndExtract(span, started, model, "rejected", "guard_blocked");
 
                 return new ExtractOutcome(
                     Ok: false,
@@ -76,18 +99,23 @@ public sealed class CardPipeline(
                     Warnings: verdict.Warnings);
             }
 
-            // ---- deserialize --------------------------------------------------------
-            var card = CardJson.Deserialize(verdict.CleanedJson!);
+            // ---- deserialize (đã chạy trong span guard ở trên) -----------------------
             if (card is null)
             {
+                EndExtract(span, started, model, "rejected", "guard_blocked");
                 return Rejected("guard_blocked", "Kết quả đọc được không hợp lệ nên đã bị chặn.");
             }
 
             // ---- Normalize → Confidence ---------------------------------------------
-            var normalized = Normalizer.Normalize(card with { Warnings = [] });
-            var scored = Confidence.Evaluate(normalized.Card, Options.ConfidenceReviewThreshold);
+            var normalized = Normalize(card);
+            var scored = Score(normalized.Card);
 
             var result = scored.Card with { FieldConfidence = scored.FieldConfidence };
+
+            span?.SetTag("partnercard.is_business_card", result.IsBusinessCard);
+            span?.SetTag("partnercard.fields_below_threshold", scored.ReviewFields.Count);
+            // Ảnh không phải danh thiếp vẫn là Ok=true ở tầng đường ống — màn chụp mới là chỗ từ chối.
+            EndExtract(span, started, model, result.IsBusinessCard ? "extracted" : "rejected", null);
 
             // ---- Audit ---------------------------------------------------------------
             audit.Log(new AuditEntry(
@@ -125,6 +153,7 @@ public sealed class CardPipeline(
             //
             // Không thử lại. Với 429 thì thử lại chỉ tiêu thêm hạn mức mà kết quả vẫn thế.
             LogExtractError(sessionId, ex.Code, Elapsed(started));
+            EndExtract(span, started, model, "error", ex.Code);
 
             return Rejected(ex.Code, ex.Message);
         }
@@ -137,6 +166,7 @@ public sealed class CardPipeline(
         {
             // Thông báo trung tính, không lộ chi tiết nội bộ (SPEC mục 10.3).
             LogExtractError(sessionId, "extract_failed", Elapsed(started));
+            EndExtract(span, started, model, "error", "extract_failed");
 
             return Rejected("extract_failed", "Không đọc được ảnh này. Thử chụp lại rõ hơn.");
         }
@@ -149,19 +179,34 @@ public sealed class CardPipeline(
     {
         var started = Stopwatch.GetTimestamp();
         var session = string.IsNullOrWhiteSpace(sessionId) ? "web" : sessionId;
+        using var span = Telemetry.StartPipelineSpan("pipeline.save");
 
         try
         {
             // ---- Normalize → Confidence ---------------------------------------------
-            var normalized = Normalizer.Normalize(draft.Card with { Warnings = [] });
-            var scored = Confidence.Evaluate(normalized.Card, Options.ConfidenceReviewThreshold);
+            var normalized = Normalize(draft.Card);
+            var scored = Score(normalized.Card);
             var card = scored.Card with { FieldConfidence = scored.FieldConfidence };
 
+            span?.SetTag("partnercard.is_business_card", card.IsBusinessCard);
+            span?.SetTag("partnercard.fields_below_threshold", scored.ReviewFields.Count);
+
             // ---- Guard trên DTO đã serialize -----------------------------------------
-            var verdict = guard.Check(CardJson.Serialize(card), GuardBranch.Save);
+            GuardResult verdict;
+            CardExtractionResult? cleaned;
+            using (Telemetry.Source.StartActivity("guard"))
+            {
+                verdict = guard.Check(CardJson.Serialize(card), GuardBranch.Save);
+                cleaned = verdict.IsBlocked ? null : CardJson.Deserialize(verdict.CleanedJson!);
+            }
+
+            span?.SetTag("partnercard.guard.warnings", verdict.Warnings.Count);
+            Telemetry.GuardWarnings.Add(verdict.Warnings.Count, new KeyValuePair<string, object?>("partnercard.branch", "save"));
+
             if (verdict.IsBlocked)
             {
                 LogGuardBlock(session, SaveTool, verdict, Elapsed(started));
+                TagOutcome(span, "rejected", "guard_blocked");
 
                 return new SaveOutcome(
                     false, null, null, "guard_blocked",
@@ -171,9 +216,10 @@ public sealed class CardPipeline(
             // Lưu bản ĐÃ DỌN, không phải bản trước guard. SG-4…SG-8 xử lý bằng cách xoá về rỗng và ghi
             // warnings (SPEC mục 7), áp cả ở nhánh này — lưu `card` thì email rác vẫn vào kho, chỉ kèm
             // một cảnh báo không ai đọc. save_partner không có form nào kiểm trước, nên đây là chốt duy nhất.
-            var cleaned = CardJson.Deserialize(verdict.CleanedJson!);
+            // (deserialize đã chạy trong span guard ở trên)
             if (cleaned is null)
             {
+                TagOutcome(span, "rejected", "guard_blocked");
                 return new SaveOutcome(
                     false, null, null, "guard_blocked",
                     "Hồ sơ không hợp lệ nên chưa được lưu.", verdict.Warnings);
@@ -181,21 +227,27 @@ public sealed class CardPipeline(
 
             var candidate = ToPartner(draft, cleaned);
 
-            // ---- Chống trùng (SPEC mục 8 — chỉ so email) -----------------------------
-            if (!draft.AllowDuplicate)
+            // Span persist bọc cả chống trùng lẫn ghi — cả hai đều là lượt đọc/ghi kho.
+            Partner saved;
+            using (Telemetry.Source.StartActivity("persist"))
             {
-                var duplicates = await store.FindDuplicatesAsync(candidate, ct);
-                if (duplicates.Count > 0)
+                // ---- Chống trùng (SPEC mục 8 — chỉ so email) -------------------------
+                if (!draft.AllowDuplicate)
                 {
-                    // Không tự gộp. Gộp là hành vi của người dùng (F-05).
-                    return new SaveOutcome(
-                        false, null, duplicates[0], "duplicate",
-                        "Đã có hồ sơ dùng chung email này.", verdict.Warnings);
+                    var duplicates = await store.FindDuplicatesAsync(candidate, ct);
+                    if (duplicates.Count > 0)
+                    {
+                        // Không tự gộp. Gộp là hành vi của người dùng (F-05).
+                        TagOutcome(span, "rejected", "duplicate");
+                        return new SaveOutcome(
+                            false, null, duplicates[0], "duplicate",
+                            "Đã có hồ sơ dùng chung email này.", verdict.Warnings);
+                    }
                 }
-            }
 
-            // ---- Persist -------------------------------------------------------------
-            var saved = await store.UpsertAsync(candidate, ct);
+                // ---- Persist ---------------------------------------------------------
+                saved = await store.UpsertAsync(candidate, ct);
+            }
 
             // ---- Audit ---------------------------------------------------------------
             audit.Log(new AuditEntry(
@@ -210,6 +262,9 @@ public sealed class CardPipeline(
                 Warnings: verdict.Warnings.Count,
                 LatencyMs: Elapsed(started)));
 
+            TagOutcome(span, "saved", null);
+            // Human in the loop: bao nhiêu trường người đã sửa trước khi bấm Lưu. Chỉ đếm (luật cứng 9).
+            Telemetry.HumanEdits.Add(draft.EditedFields.Count);
             return new SaveOutcome(true, saved.PartnerId, null, null, null, verdict.Warnings);
         }
         catch (OperationCanceledException)
@@ -218,6 +273,7 @@ public sealed class CardPipeline(
         }
         catch (Exception)
         {
+            TagOutcome(span, "error", "save_failed");
             return new SaveOutcome(
                 false, null, null, "save_failed", "Không lưu được hồ sơ.", []);
         }
@@ -284,6 +340,55 @@ public sealed class CardPipeline(
             BlockCode: verdict.BlockCode,
             Warnings: verdict.Warnings.Count,
             LatencyMs: latencyMs));
+
+    /// <summary>Normalize trong span riêng — đúng lời gọi như trước H-02, chỉ thêm span.</summary>
+    private static NormalizedCard Normalize(CardExtractionResult card)
+    {
+        using var _ = Telemetry.Source.StartActivity("normalize");
+        return Normalizer.Normalize(card with { Warnings = [] });
+    }
+
+    /// <summary>Confidence trong span riêng — đúng lời gọi như trước H-02, chỉ thêm span.</summary>
+    private ScoredCard Score(CardExtractionResult card)
+    {
+        using var _ = Telemetry.Source.StartActivity("confidence");
+        return Confidence.Evaluate(card, Options.ConfidenceReviewThreshold);
+    }
+
+    /// <summary>
+    /// Kết cục của một lượt đường ống, gắn lên span gốc. Chỉ mã — không thông điệp, không nội dung
+    /// thẻ (luật cứng 9). Chỉ <c>error</c> mới đặt trạng thái Error; từ chối là kết cục bình thường.
+    /// </summary>
+    private static void TagOutcome(Activity? span, string outcome, string? errorCode)
+    {
+        if (span is null)
+        {
+            return;
+        }
+
+        span.SetTag("partnercard.outcome", outcome);
+
+        if (errorCode is not null)
+        {
+            span.SetTag("partnercard.error_code", errorCode);
+        }
+
+        if (outcome == "error")
+        {
+            span.SetStatus(ActivityStatusCode.Error, errorCode);
+        }
+    }
+
+    /// <summary>Kết cục nhánh trích xuất: gắn lên span gốc và ghi histogram độ trễ.</summary>
+    private static void EndExtract(Activity? span, long started, string model, string outcome, string? errorCode)
+    {
+        TagOutcome(span, outcome, errorCode);
+
+        Telemetry.ExtractDuration.Record(
+            Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+            new KeyValuePair<string, object?>("gen_ai.request.model", model),
+            new KeyValuePair<string, object?>("partnercard.outcome", outcome));
+    }
 
     private static ExtractOutcome Rejected(string code, string message) =>
         new(false, null, [], code, message, []);
