@@ -57,4 +57,16 @@
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
   </ItemGroup>
 
+  <!--
+    Quan sát (H-02, ngoại lệ SPEC mục 1 duyệt 24/09). Ghim số cụ thể; hai gói Instrumentation
+    phát hành theo nhịp riêng nên số của chúng không trùng gói lõi. Chỉ nối khi có biến
+    OTEL_EXPORTER_OTLP_ENDPOINT — xem Program.cs.
+  -->
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.19.0" />
+  </ItemGroup>
+
 </Project>

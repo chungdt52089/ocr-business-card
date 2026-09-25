@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 using PartnerCard.Web.Configuration;
 using PartnerCard.Web.Models;
+using PartnerCard.Web.Observability;
 
 namespace PartnerCard.Web.Extraction;
 
@@ -95,9 +96,39 @@ public sealed class GeminiExtractor(
     {
         // sourceName cố ý không dùng: mô hình không cần biết tên file (SPEC mục 4.1).
         var started = Stopwatch.GetTimestamp();
-        var body = await SendAsync(BuildRequestBody(imageBytes, mimeType, languageHint), ct);
 
-        return ReadResult(body, Elapsed(started));
+        // Span theo quy ước GenAI của OpenTelemetry (BACKLOG H-02). Chỉ siêu dữ liệu của lời gọi —
+        // không prompt, không ảnh, không văn bản mô hình trả (luật cứng 9).
+        using var span = Telemetry.Source.StartActivity("gen_ai.generate_content", ActivityKind.Client);
+        span?.SetTag("gen_ai.operation.name", "generate_content");
+        span?.SetTag("gen_ai.system", "gemini");
+        span?.SetTag("gen_ai.request.model", Options.Model);
+        span?.SetTag("partnercard.prompt_version", Prompts.Version);
+
+        try
+        {
+            var body = await SendAsync(BuildRequestBody(imageBytes, mimeType, languageHint), span, ct);
+            var result = ReadResult(body, Elapsed(started));
+
+            // Hai số đã có sẵn từ usageMetadata (ReadResult) — cùng số đi vào audit.
+            span?.SetTag("gen_ai.usage.input_tokens", result.Usage.TokensIn);
+            span?.SetTag("gen_ai.usage.output_tokens", result.Usage.TokensOut);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            // Chỉ ghi mã rồi ném tiếp nguyên dạng — hành vi lỗi không đổi.
+            var code = ex switch
+            {
+                ExtractorException known => known.Code,
+                OperationCanceledException => "cancelled",
+                _ => "extract_failed",
+            };
+            span?.SetTag("error.type", code);
+            span?.SetStatus(ActivityStatusCode.Error, code);
+            throw;
+        }
     }
 
     /// <summary>
@@ -129,7 +160,7 @@ public sealed class GeminiExtractor(
     /// nó ở mắt <c>catch (OperationCanceledException)</c> và exception bay ra khỏi đường ống,
     /// trái SPEC mục 10.3 — đúng cái bẫy SPEC mục 4.1 nêu.
     /// </summary>
-    private async Task<string> SendAsync(string requestBody, CancellationToken ct)
+    private async Task<string> SendAsync(string requestBody, Activity? span, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(Options.ExtractTimeoutSeconds));
@@ -139,6 +170,10 @@ public sealed class GeminiExtractor(
             for (var attempt = 1; ; attempt++)
             {
                 var (status, body) = await SendOnceAsync(requestBody, timeout.Token);
+
+                // Ghi đè mỗi lần gửi: span giữ mã và số lần thử lại của lần gửi CUỐI.
+                span?.SetTag("http.response.status_code", (int)status);
+                span?.SetTag("partnercard.retry_count", attempt - 1);
 
                 if (IsSuccess(status))
                 {

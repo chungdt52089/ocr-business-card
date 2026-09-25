@@ -1,7 +1,11 @@
 using PartnerCard.Web.Audit;
 using PartnerCard.Web.Components;
 using PartnerCard.Web.Configuration;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using PartnerCard.Web.Extraction;
+using PartnerCard.Web.Observability;
 using PartnerCard.Web.Processing;
 using PartnerCard.Web.Storage;
 
@@ -96,6 +100,36 @@ builder.Services
     // Trần này áp cho CHUỖI BASE64, không phải byte JPEG: base64 dài hơn 1,333 lần, nên 1,5 MB
     // JPEG là đúng 2,0 MB trên dây. Trang chụp in cả hai con số vì lý do đó.
     .AddHubOptions(hub => hub.MaximumReceiveMessageSize = 2 * 1024 * 1024);
+
+// Quan sát (BACKLOG H-02). CHỈ nối khi có OTEL_EXPORTER_OTLP_ENDPOINT — không có biến thì không đăng ký
+// gì, ActivitySource không có ai nghe, và app chạy y như trước (Cloud Run không đặt biến này). Exporter tự
+// đọc endpoint và protocol từ biến môi trường chuẩn. Không WithLogging: ILogger giữ nguyên như cũ.
+if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+{
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(resource => resource.AddService("partnercard"))
+        .WithTracing(tracing => tracing
+            .AddSource(Telemetry.Name)
+            // Bỏ kết nối Blazor (/_blazor sống suốt phiên), khung Blazor và file tĩnh — không thì Aspire ngập
+            // span rác. Mọi đường dẫn có phần mở rộng file coi là file tĩnh.
+            .AddAspNetCoreInstrumentation(aspnet =>
+            {
+                aspnet.Filter = context =>
+                    !context.Request.Path.StartsWithSegments("/_blazor")
+                    && !context.Request.Path.StartsWithSegments("/_framework")
+                    && !Path.HasExtension(context.Request.Path.Value);
+
+                // Tắt span của mỗi lời gọi hub SignalR (ComponentHub/OnRenderCompleted… mỗi giây). Span Blazor
+                // "Event onclick → …" thuộc EnableRazorComponentsSupport, option riêng, giữ nguyên — pipeline.save
+                // nằm dưới nó.
+                aspnet.EnableAspNetCoreSignalRSupport = false;
+            })
+            .AddHttpClientInstrumentation()
+            .AddOtlpExporter())
+        .WithMetrics(metrics => metrics
+            .AddMeter(Telemetry.Name)
+            .AddOtlpExporter());
+}
 
 var app = builder.Build();
 
